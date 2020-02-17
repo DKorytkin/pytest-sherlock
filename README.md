@@ -1,4 +1,8 @@
 # pytest_hercule
+
+[![Build Status](https://travis-ci.com/DKorytkin/pytest_hercule.svg?branch=master)](https://travis-ci.com/DKorytkin/pytest_hercule)
+[![Cov](https://codecov.io/gh/DKorytkin/pytest_hercule/branch/master/graph/badge.svg)](https://codecov.io/gh/DKorytkin/pytest_hercule/branch/master)
+
 Pytest plugin which help to find coupled tests.
 
 Sometimes we have coupled tests which depend from ordering

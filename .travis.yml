@@ -9,7 +9,7 @@ install:
  - pip install -r requirements-dev.txt
 
 script:
-  - flake8 pytest_hercule
+  - flake8 pytest_hercule --max-line-length=100
 
 after_success:
  - codecov -t "$CODECOV_TOKEN"

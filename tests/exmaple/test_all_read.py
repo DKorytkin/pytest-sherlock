@@ -1,4 +1,3 @@
-import pytest
 
 
 def test_read_params(config, param):

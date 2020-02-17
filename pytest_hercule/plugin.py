@@ -90,7 +90,8 @@ def pytest_collection_modifyitems(session, config, items):
     if config.getoption("--flaky-test"):
         test_collection = TestCollection(items)
         items[:] = test_collection.chain_for(config.option.flaky_test)
-    outcome = yield
+    # outcome = yield
+    yield
 
 
 def pytest_runtest_protocol(item, nextitem):
@@ -109,6 +110,7 @@ def pytest_runtest_protocol(item, nextitem):
     return True
 
 
+@pytest.hookimpl(trylast=True)
 def pytest_report_collectionfinish(config, startdir, items):
     return "Try to find coupled tests:"
 

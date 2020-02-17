@@ -17,9 +17,9 @@ after_success:
 deploy:
   provider: pypi
   distributions: sdist bdist_wheel
-  user: "d.korytkin"
+  user: "__token__"
   password:
-    secure: OHlLn7N3tboe9LZWDdPcNjA9q65GHtU1u9PVsUiilJAzqXP4X8DUkEooyCOBJpoqLiRcCXkKulPp7rWZHZaATaD02nr9gwHs/dmNzu7IinDpWXwhZyaZ5e01MK0MNKLmfHe4ngMLQcPb+OAlAJi9WD/UfNRkHoFHMuEh+HTYWqPpJYRjSzQAw4e6lR6y9X88LesrjHc0/hHYKVvgN6SDVLwYTrEgBqlrfFOj687Jp9a0rP5O3MMqfAbRxsmU/OmdHoqOOtrSvg3Ml9Pgp2oIVZbpyV/R+os3//Qx+x9J0SE7XIOTan0Ei3MJ/7RzukqvL2764ywWXpKQ7dHn6SLNPjTbj0qpA72lSbJBXVG23zkJPYbo5yw4k4++cDRCCcYMMsKTljiLm0X0lDLDg9N2+IekNS7SSVrWqkywjCfTRDlQhGZVs61IaU/ARUWwihSvfONBKHhSNPF2MCCwNzkbcngkQd56dAeE/2E5bM8ejz5WRYFwrcfSdTzTz45N5TaXjEWCTl715BSXNcSM2UhmdLFeYa55+WRLzCQTCRXMWR7DI9kJ/MWI8pCCb94ewJSJPqWy0u4vJNpnoPRZ+D6aruGg68qmK5L9skf8FO6lC9jQX5KIyMI9EhdtH5oDImUYNBZPAbzMPXrGZWanNOsVdKvfPux32YdyBfoBE30bkno=
+    secure: pypi-AgEIcHlwaS5vcmcCJGMwY2E5MGRmLTkwYTItNGM1Zi04MGM1LWY0YjE4Y2M0NmI1YwACJXsicGVybWlzc2lvbnMiOiAidXNlciIsICJ2ZXJzaW9uIjogMX0AAAYghj-nM8DhlSfxGkzexizYk06N-j7iD_2-VW3yijapWG8
   on:
     tags: true
     all_branches: true

@@ -1,2 +1,6 @@
-pylint
-black
+setuptools==28.8.0
+pytest==3.1.2
+
+
+flake8
+twine

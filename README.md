@@ -4,8 +4,8 @@ Pytest plugin which help to find coupled tests.
 Sometimes we have coupled tests which depend from ordering
 
 For example:
-- *PASSES* `tests/exmaple/test_all_read.py tests/exmaple/test_b_modify.py tests/exmaple/test_c_delete.py`
-- *FAILED* `tests/exmaple/test_c_delete.py tests/exmaple/test_b_modify.py tests/exmaple/test_all_read.py`
+- **PASSES** `tests/exmaple/test_all_read.py tests/exmaple/test_b_modify.py tests/exmaple/test_c_delete.py`
+- **FAILED** `tests/exmaple/test_c_delete.py tests/exmaple/test_b_modify.py tests/exmaple/test_all_read.py`
 
 In this case pretty simple to detect coupled tests, but if we have >=1k tests which called before it will hard
 
@@ -56,6 +56,6 @@ tests/exmaple/test_all_read.py::test_read_params FAILED                         
 
 ### TODO
 I have a couple ideas, how to improve finder coupled tests:
-- use AST for detect common peace of code (variables, functions, etc...)
-- run not all tests (binary search algorithm)
-- Also need to add tests for it =)
+- use **AST** for detect common peace of code *(variables, functions, etc...)*
+- run not all tests *(binary search algorithm)*
+- **Also need to add tests for it =)**

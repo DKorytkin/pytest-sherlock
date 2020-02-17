@@ -17,7 +17,7 @@ setup(
     keywords=["py.test", "pytest", "flaky", "coupled", "tests"],
     py_modules=["pytest_hercule.plugin"],
     packages=find_packages(),
-    install_requires=["setuptools>=40.0", "pytest >= 3.1.2"],
+    install_requires=["setuptools>=28.8.0", "pytest>=3.1.2"],
     entry_points={"pytest11": ["name_of_plugin = pytest_hercule.plugin"]},
     license="MIT license",
     classifiers=[

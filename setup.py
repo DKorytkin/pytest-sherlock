@@ -13,6 +13,7 @@ setup(
     author_email="dkorytkin@gmail.com",
     description="pytest plugin help to find coupled tests",
     long_description=long_description(),
+    long_description_content_type="text/markdown",
     url="https://github.com/DKorytkin/pytest_hercule",
     keywords=["py.test", "pytest", "flaky", "coupled", "tests"],
     py_modules=["pytest_hercule.plugin"],

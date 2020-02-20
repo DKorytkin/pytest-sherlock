@@ -1,2 +1,2 @@
 
-pytest_plugins = "pytest_hercule.plugin"
+pytest_plugins = "pytest_sherlock.plugin"

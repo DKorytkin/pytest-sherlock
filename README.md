@@ -1,7 +1,7 @@
-# pytest_hercule
+# pytest-sherlock
 
-[![Build Status](https://travis-ci.com/DKorytkin/pytest_hercule.svg?branch=master)](https://travis-ci.com/DKorytkin/pytest_hercule)
-[![Cov](https://codecov.io/gh/DKorytkin/pytest_hercule/branch/master/graph/badge.svg)](https://codecov.io/gh/DKorytkin/pytest_hercule/branch/master)
+[![Build Status](https://travis-ci.com/DKorytkin/pytest-sherlock.svg?branch=master)](https://travis-ci.com/DKorytkin/pytest-sherlock)
+[![Cov](https://codecov.io/gh/DKorytkin/pytest-sherlock/branch/master/graph/badge.svg)](https://codecov.io/gh/DKorytkin/pytest-sherlock/branch/master)
 
 Pytest plugin which help to find coupled tests.
 
@@ -21,7 +21,7 @@ In this case pretty simple to detect coupled tests, but if we have >=1k tests wh
 
 ### Install
 ```bash
-pip install pytest_hercule
+pip install pytest-sherlock
 ```
 
 ### how to use:
@@ -31,9 +31,6 @@ pytest tests/exmaple/test_c_delete.py tests/exmaple/test_b_modify.py tests/exmap
 Plugin didn't run all tests, it try to find some possible guilty test and will run first
 ```bash
 ======================================================================================== test session starts ========================================================================================
-platform darwin -- Python 2.7.16, pytest-3.5.1, py-1.8.1, pluggy-0.6.0 -- /Users/denis.korytkin/.virtualenvs/pytest_hercule/bin/python
-cachedir: .pytest_cache
-rootdir: /Users/denis.korytkin/workspace/pytest_hercule, inifile:
 collected 3 items                                                                                                                                                                                   
 Try to find coupled tests:
 
@@ -46,9 +43,6 @@ tests/exmaple/test_c_delete.py::test_delete_random_param PASSED                 
 Also you can use `pytest -x` or `--exitfirst`
 ```bash
 ======================================================================================== test session starts ========================================================================================
-platform darwin -- Python 2.7.16, pytest-3.5.1, py-1.8.1, pluggy-0.6.0 -- /Users/denis.korytkin/.virtualenvs/pytest_hercule/bin/python
-cachedir: .pytest_cache
-rootdir: /Users/denis.korytkin/workspace/pytest_hercule, inifile:
 collected 3 items                                                                                                                                                                                   
 Try to find coupled tests:
 

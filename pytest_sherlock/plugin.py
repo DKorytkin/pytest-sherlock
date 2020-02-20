@@ -6,7 +6,7 @@ from _pytest.runner import runtestprotocol
 
 def pytest_addoption(parser):
     group = parser.getgroup(
-        "hercule",
+        "sherlock",
         "find coupled tests")
     group.addoption(
         "--flaky-test",

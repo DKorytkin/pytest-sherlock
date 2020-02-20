@@ -18,7 +18,7 @@ setup(
     keywords=["py.test", "pytest", "flaky", "coupled", "tests"],
     py_modules=["pytest_sherlock.plugin"],
     packages=find_packages(),
-    install_requires=["setuptools>=28.8.0", "pytest>=3.1.2"],
+    install_requires=["setuptools>=28.8.0", "pytest>=4.3.0"],
     entry_points={"pytest11": ["name_of_plugin = pytest_sherlock.plugin"]},
     license="MIT license",
     classifiers=[

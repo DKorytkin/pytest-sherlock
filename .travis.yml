@@ -17,8 +17,10 @@ after_success:
 deploy:
   provider: pypi
   distributions: sdist bdist_wheel
+  skip_existing: true
   user: "__token__"
-  password: pypi-AgEIcHlwaS5vcmcCJGMwY2E5MGRmLTkwYTItNGM1Zi04MGM1LWY0YjE4Y2M0NmI1YwACJXsicGVybWlzc2lvbnMiOiAidXNlciIsICJ2ZXJzaW9uIjogMX0AAAYghj-nM8DhlSfxGkzexizYk06N-j7iD_2-VW3yijapWG8
+  password:
+    secure: "$PYPI_TOKEN"
   on:
     tags: true
     all_branches: true

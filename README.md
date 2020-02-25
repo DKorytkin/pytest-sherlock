@@ -31,29 +31,25 @@ pytest tests/exmaple/test_c_delete.py tests/exmaple/test_b_modify.py tests/exmap
 Plugin didn't run all tests, it try to find some possible guilty test and will run first
 ```bash
 ======================================================================================== test session starts ========================================================================================
-collected 3 items                                                                                                                                                                                   
-Try to find coupled tests:
+collected 10 items                                                                                                                                                                                  
+Try to find coupled tests
 
-tests/exmaple/test_b_modify.py::test_modify_random_param PASSED                                                                                                                               [ 33%]
-tests/exmaple/test_all_read.py::test_read_params FAILED                                                                                                                                       [ 66%]
-tests/exmaple/test_c_delete.py::test_delete_random_param PASSED                                                                                                                               [100%]
-
-============================================================================================= FAILURES ==============================================================================================
-```
-Also you can use `pytest -x` or `--exitfirst`
-```bash
-======================================================================================== test session starts ========================================================================================
-collected 3 items                                                                                                                                                                                   
-Try to find coupled tests:
-
-tests/exmaple/test_b_modify.py::test_modify_random_param PASSED                                                                                                                               [ 33%]
-tests/exmaple/test_all_read.py::test_read_params FAILED                                                                                                                                       [ 66%]
-
-============================================================================================= FAILURES ==============================================================================================
+Step #1:
+tests/exmaple/test_all_read.py::test_passed PASSED                                                                                                                                            [100%]
+tests/exmaple/test_b_modify.py::test_modified_passed PASSED                                                                                                                                   [200%]
+tests/exmaple/test_b_modify.py::test_do_not_modified PASSED                                                                                                                                   [300%]
+tests/exmaple/test_b_modify.py::test_flaky PASSED                                                                                                                                             [400%]
+tests/exmaple/test_all_read.py::test_read_params PASSED                                                                                                                                       [500%]Step #2:
+tests/exmaple/test_c_delete.py::test_deleted_passed PASSED                                                                                                                                    [600%]
+tests/exmaple/test_c_delete.py::test_do_not_delete PASSED                                                                                                                                     [700%]
+tests/exmaple/test_all_read.py::test_read_params PASSED                                                                                                                                       [700%]Step #3:
+tests/exmaple/test_c_delete.py::test_delete_random_param PASSED                                                                                                                               [800%]
+tests/exmaple/test_all_read.py::test_read_params PASSED                                                                                                                                       [800%]Step #4:
+tests/exmaple/test_b_modify.py::test_modify_random_param PASSED                                                                                                                               [900%]
+tests/exmaple/test_all_read.py::test_read_params COUPLED 
 ```
 
 ### TODO
 I have a couple ideas, how to improve finder coupled tests:
 - use **AST** for detect common peace of code *(variables, functions, etc...)*
-- run not all tests *(binary search algorithm)*
 - **Also need to add tests for it =)**

@@ -3,5 +3,5 @@ pytest==4.3.0
 
 
 flake8>=3.7.9
-twine>=1.15
+twine>=1.15.0
 wheel>=0.34.2

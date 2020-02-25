@@ -26,7 +26,7 @@ pip install pytest-sherlock
 
 ### how to use:
 ```bash
-pytest tests/exmaple/test_c_delete.py tests/exmaple/test_b_modify.py tests/exmaple/test_all_read.py --flaky-test="test_read_params" -vv -x
+pytest tests/exmaple/test_c_delete.py tests/exmaple/test_b_modify.py tests/exmaple/test_all_read.py --flaky-test="test_read_params" -vv
 ```
 Plugin didn't run all tests, it try to find some possible guilty test and will run first
 ```bash

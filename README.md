@@ -35,17 +35,17 @@ collected 10 items
 Try to find coupled tests
 
 Step #1:
-tests/exmaple/test_all_read.py::test_passed PASSED                                                                                                                                            [100%]
-tests/exmaple/test_b_modify.py::test_modified_passed PASSED                                                                                                                                   [200%]
-tests/exmaple/test_b_modify.py::test_do_not_modified PASSED                                                                                                                                   [300%]
-tests/exmaple/test_b_modify.py::test_flaky PASSED                                                                                                                                             [400%]
-tests/exmaple/test_all_read.py::test_read_params PASSED                                                                                                                                       [500%]Step #2:
-tests/exmaple/test_c_delete.py::test_deleted_passed PASSED                                                                                                                                    [600%]
-tests/exmaple/test_c_delete.py::test_do_not_delete PASSED                                                                                                                                     [700%]
-tests/exmaple/test_all_read.py::test_read_params PASSED                                                                                                                                       [700%]Step #3:
-tests/exmaple/test_c_delete.py::test_delete_random_param PASSED                                                                                                                               [800%]
-tests/exmaple/test_all_read.py::test_read_params PASSED                                                                                                                                       [800%]Step #4:
-tests/exmaple/test_b_modify.py::test_modify_random_param PASSED                                                                                                                               [900%]
+tests/exmaple/test_b_modify.py::test_modify_random_param PASSED                                                                                                                               [100%]
+tests/exmaple/test_c_delete.py::test_delete_random_param PASSED                                                                                                                               [200%]
+tests/exmaple/test_c_delete.py::test_deleted_passed PASSED                                                                                                                                    [300%]
+tests/exmaple/test_c_delete.py::test_do_not_delete PASSED                                                                                                                                     [400%]
+tests/exmaple/test_all_read.py::test_read_params COUPLED                                                                                                                                      [500%]
+Step #2:
+tests/exmaple/test_b_modify.py::test_modify_random_param PASSED                                                                                                                               [500%]
+tests/exmaple/test_c_delete.py::test_delete_random_param PASSED                                                                                                                               [500%]
+tests/exmaple/test_all_read.py::test_read_params COUPLED                                                                                                                                      [500%]
+Step #3:
+tests/exmaple/test_b_modify.py::test_modify_random_param PASSED                                                                                                                               [500%]
 tests/exmaple/test_all_read.py::test_read_params COUPLED 
 ```
 

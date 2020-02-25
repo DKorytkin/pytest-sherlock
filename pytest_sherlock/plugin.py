@@ -146,9 +146,9 @@ def pytest_collection_modifyitems(session, config, items):
 def pytest_runtest_protocol(item, nextitem):
     tbt = item.session.tests_binary_tree
     tw = item.config.get_terminal_writer()
-    tw.line()
     steps = 1
     while tbt is not None and len(tbt.value) >= 1:
+        tw.line()
         tw.write("Step #{}:".format(steps))
         current_tests = tbt.left.value if tbt.left is not None else tbt.value
         for next_idx, test_func in enumerate(current_tests, 1):

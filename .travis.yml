@@ -16,7 +16,7 @@ script:
   - pytest -vv tests/pytest_sherlock
 
 after_success:
- - codecov -t "$CODECOV_TOKEN"
+ - bash <(curl -s https://codecov.io/bash) -t "$CODECOV_TOKEN"
 
 deploy:
   provider: pypi

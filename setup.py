@@ -15,7 +15,11 @@ setup(
     long_description_content_type="text/markdown",
     url="https://github.com/DKorytkin/pytest-sherlock",
     keywords=["py.test", "pytest", "flaky", "coupled", "tests"],
-    py_modules=["pytest_sherlock.plugin"],
+    py_modules=[
+        "pytest_sherlock.binary_tree_search",
+        "pytest_sherlock.plugin",
+        "pytest_sherlock.sherlock",
+    ],
     packages=find_packages(exclude=["tests*"]),
     install_requires=["setuptools>=28.8.0", "pytest>=4.3.0"],
     entry_points={"pytest11": ["name_of_plugin = pytest_sherlock.plugin"]},

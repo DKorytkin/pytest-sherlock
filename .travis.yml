@@ -3,13 +3,14 @@ dist: xenial
 language: python
 
 python:
- - '2.7'
+  - '2.7'
 
 install:
- - pip install -r requirements-dev.txt
+  - pip install -r requirements-dev.txt
 
 script:
   - flake8 pytest_sherlock --max-line-length=100
+  - pytest -vv tests/pytest_sherlock
 
 after_success:
  - codecov -t "$CODECOV_TOKEN"

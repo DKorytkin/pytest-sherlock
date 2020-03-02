@@ -13,7 +13,7 @@ install:
 
 script:
   - flake8 pytest_sherlock --max-line-length=100
-  - pytest tests/pytest_sherlock -vv --cov-report xml --cov=pytest_sherlock
+  - pytest tests/ --ignore="tests/exmaple" -vv --cov-report xml --cov=pytest_sherlock
 
 after_success:
  - bash <(curl -s https://codecov.io/bash) -t "$CODECOV_TOKEN"

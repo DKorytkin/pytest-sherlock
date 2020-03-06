@@ -21,8 +21,8 @@ setup(
         "pytest_sherlock.sherlock",
     ],
     packages=find_packages(exclude=["tests*"]),
-    install_requires=["setuptools>=28.8.0", "pytest>=4.3.0"],
-    entry_points={"pytest11": ["name_of_plugin = pytest_sherlock.plugin"]},
+    install_requires=["setuptools>=28.8.0", "pytest>=3.5.1"],
+    entry_points={"pytest11": ["sherlock = pytest_sherlock.plugin"]},
     license="MIT license",
     python_requires=">=2.7",
     classifiers=[

@@ -34,7 +34,6 @@ def _remove_failed_setup_state_from_session(item):
 
 
 def refresh(item):
-    # TODO move to custom hooks?
     _remove_cached_results_from_failed_fixtures(item)
     _remove_failed_setup_state_from_session(item)
     return True
@@ -61,7 +60,7 @@ class TestCollection(object):
             tests,
             key=lambda item: (
                 len(set(item.fixturenames) & set(self.test_func.fixturenames)),
-                item.parent.nodeid
+                item.parent.nodeid  # TODO add ast analise
             ),
             reverse=True,
         )

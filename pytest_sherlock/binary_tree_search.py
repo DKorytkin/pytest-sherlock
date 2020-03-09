@@ -12,7 +12,7 @@ class Root(object):
         self.root = None
 
     def insert(self, value):
-        if self.root is not None:
+        if self.root is not None or value is None:
             return self.root
         self.root = Node(value)
         return self._insert(value, self.root)

@@ -67,3 +67,8 @@ def test_root_insert_not_even_data(root):
     assert isinstance(root.root.right.right.right, Node)
     assert root.root.right.right.right.value == data[-1:]
     assert root.root.right.right.right.right is None
+
+
+def test_root_insert_without_data(root):
+    root.insert(None)
+    assert root.root is None

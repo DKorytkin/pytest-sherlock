@@ -2,6 +2,9 @@
 
 [![Build Status](https://travis-ci.com/DKorytkin/pytest-sherlock.svg?branch=master)](https://travis-ci.com/DKorytkin/pytest-sherlock)
 [![Cov](https://codecov.io/gh/DKorytkin/pytest-sherlock/branch/master/graph/badge.svg)](https://codecov.io/gh/DKorytkin/pytest-sherlock/branch/master)
+[![PyPI](https://img.shields.io/pypi/v/pytest-sherlock)](https://pypi.org/project/pytest-sherlock/)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/pytest-sherlock)](https://pypi.org/project/pytest-sherlock/)
+[![PyPI - Wheel](https://img.shields.io/pypi/wheel/pytest-sherlock)](https://pypi.org/project/pytest-sherlock/)
 
 Pytest plugin which help to find coupled tests.
 

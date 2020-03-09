@@ -33,12 +33,6 @@ def _remove_failed_setup_state_from_session(item):
     return True
 
 
-def refresh(item):
-    _remove_cached_results_from_failed_fixtures(item)
-    _remove_failed_setup_state_from_session(item)
-    return True
-
-
 class Collection(object):
 
     def __init__(self, items):
@@ -91,7 +85,10 @@ class Sherlock(object):
 
     @staticmethod
     def refresh_state(item):
-        return refresh(item)
+        # TODO need investigate
+        _remove_cached_results_from_failed_fixtures(item)
+        _remove_failed_setup_state_from_session(item)
+        return True
 
     @pytest.hookimpl(hookwrapper=True)
     def pytest_collection_modifyitems(self, session, config, items):

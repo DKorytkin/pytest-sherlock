@@ -3,35 +3,51 @@ import pytest
 from _pytest.config import Config
 from _pytest.nodes import Item
 
-from pytest_sherlock.binary_tree_search import Root
+from pytest_sherlock.binary_tree_search import Root, Node
 from pytest_sherlock.sherlock import Collection, Sherlock
 
 
+FAKE_FIXTURE_NAMES = ["my_fixture", "fixture_do_something", "other_fixture"]
+
+
+def make_fake_test_item(name, *fixtures):
+    pytest_func = mock.MagicMock(spec=Item)
+    pytest_func.name = "test_{}".format(name)
+    node = mock.MagicMock(spec=Item)
+    node.nodeid = "tests/test_{}.py".format(name)
+    pytest_func.parent = node
+    pytest_func.nodeid = "{}::{}".format(pytest_func.parent.nodeid, pytest_func.name)
+    pytest_func.fixturenames = [f for f in fixtures]
+    ihook = mock.MagicMock()
+    ihook.pytest_runtest_logreport.return_value = True
+    ihook.pytest_runtest_logstart.return_value = True
+    ihook.pytest_runtest_logfinish.return_value = True
+    pytest_func.ihook = ihook
+    return pytest_func
+
+
+@pytest.fixture(scope="class")
+def target_item():
+    return make_fake_test_item("five")
+
+
+@pytest.fixture(scope="class")
+def items(target_item):
+    pytest_items = [make_fake_test_item(item) for item in ["one", "two", "tree", "four", "six"]]
+    pytest_items.insert(4, target_item)  # between four and six
+
+    # ['other_fixture'] for test_one
+    pytest_items[0].fixturenames[:] = FAKE_FIXTURE_NAMES[2:]
+    # ['fixture_do_something', 'other_fixture'] for test_tree
+    pytest_items[2].fixturenames[:] = FAKE_FIXTURE_NAMES[1:]
+    # ['my_fixture', 'fixture_do_something', 'other_fixture'] for test_five
+    pytest_items[4].fixturenames[:] = FAKE_FIXTURE_NAMES[:]  # should target_test
+    # ['my_fixture', 'fixture_do_something', 'other_fixture'] for test_six
+    pytest_items[-1].fixturenames[:] = FAKE_FIXTURE_NAMES[:]
+    return pytest_items
+
+
 class TestCollection(object):
-
-    @pytest.fixture(scope="class")
-    def items(self):
-        fixture_names = ["my_fixture", "fixture_do_something", "other_fixture"]
-        pytest_items = []
-        for item in ["one", "two", "tree", "four", "five", "six"]:
-            pytest_func = mock.MagicMock(spec=Item)
-            pytest_func.name = "test_{}".format(item)
-            node = mock.MagicMock(spec=Item)
-            node.nodeid = "tests/test_{}.py".format(item)
-            pytest_func.parent = node
-            pytest_func.nodeid = "{}::{}".format(pytest_func.parent.nodeid, pytest_func.name)
-            pytest_func.fixturenames = []
-            pytest_items.append(pytest_func)
-
-        # ['other_fixture'] for test_one
-        pytest_items[0].fixturenames[:] = fixture_names[2:]
-        # ['fixture_do_something', 'other_fixture'] for test_tree
-        pytest_items[2].fixturenames[:] = fixture_names[1:]
-        # ['my_fixture', 'fixture_do_something', 'other_fixture'] for test_five
-        pytest_items[4].fixturenames[:] = fixture_names  # should target_test
-        # ['my_fixture', 'fixture_do_something', 'other_fixture'] for test_six
-        pytest_items[-1].fixturenames[:] = fixture_names
-        return pytest_items
 
     @pytest.fixture()
     def collection(self, items):
@@ -111,3 +127,50 @@ class TestSherlock(object):
         sherlock.write_step(line)
         sherlock.tw.line.assert_called_once()
         sherlock.tw.write.assert_called_once_with("Step #{}:".format(line))
+
+    def test_log(self, sherlock, target_item):
+        with sherlock.log(target_item) as logger:
+            target_item.ihook.pytest_runtest_logstart.assert_called_once_with(
+                nodeid=target_item.nodeid, location=target_item.location
+            )
+            assert logger() is True
+        target_item.ihook.pytest_runtest_logfinish.assert_called_once_with(
+            nodeid=target_item.nodeid, location=target_item.location
+        )
+
+    @pytest.mark.parametrize("by", ("name", "nodeid"))
+    def test_pytest_collection_modifyitems_with_option(self, sherlock, items, target_item, by):
+        config = mock.MagicMock()
+        config.getoption.return_value = True
+        config.option.flaky_test = getattr(target_item, by)
+        next(
+            sherlock.pytest_collection_modifyitems(
+                session=mock.MagicMock(), config=config, items=items
+            )
+        )
+        assert items == [target_item]
+        config.getoption.assert_called_once()
+        assert isinstance(sherlock.bts_root, Root)
+        assert sherlock.bts_root.root is not None
+        assert isinstance(sherlock.bts_root.root, Node)
+
+    @pytest.mark.parametrize("by", ("name", "nodeid"))
+    def test_pytest_collection_modifyitems_without_option(self, sherlock, items, target_item, by):
+        config = mock.MagicMock()
+        config.getoption.return_value = False
+        config.option.flaky_test = getattr(target_item, by)
+        next(
+            sherlock.pytest_collection_modifyitems(
+                session=mock.MagicMock(), config=config, items=items
+            )
+        )
+        assert items == items
+        config.getoption.assert_called_once()
+        assert isinstance(sherlock.bts_root, Root)
+        assert sherlock.bts_root.root is None
+
+    def test_pytest_report_collectionfinish(self, sherlock, items):
+        report = sherlock.pytest_report_collectionfinish(
+            config=mock.MagicMock(), startdir=mock.MagicMock(), items=items
+        )
+        assert report == "Try to find coupled tests"

@@ -1,11 +1,13 @@
 import mock
 import pytest
+from _pytest.config import Config
 from _pytest.nodes import Item
 
-from pytest_sherlock.sherlock import TestCollection
+from pytest_sherlock.binary_tree_search import Root
+from pytest_sherlock.sherlock import Collection, Sherlock
 
 
-class TestTestCollection(object):
+class TestCollection(object):
 
     @pytest.fixture(scope="class")
     def items(self):
@@ -33,14 +35,19 @@ class TestTestCollection(object):
 
     @pytest.fixture()
     def collection(self, items):
-        return TestCollection(items)
+        return Collection(items)
 
     def test_create_instance(self, items):
-        tc = TestCollection(items)
+        tc = Collection(items)
         assert tc.items == items
         assert tc.test_func is None
 
-    def test_find_needed_tests_by_name(self, collection):
+    @pytest.mark.parametrize(
+        "by",
+        ("test_five", "tests/test_five.py::test_five"),
+        ids=["name", "node_id"]
+    )
+    def test_find_needed_tests(self, collection, by):
         """
         Method needed_tests must return list of tests which was ran before target test (flaky)
         and have use the same fixtures
@@ -48,10 +55,59 @@ class TestTestCollection(object):
         'tests/test_tree.py::test_tree'
         'tests/test_one.py::test_one'
         'tests/test_two.py::test_two'
-        'tests/test_four.py::test_four
+        'tests/test_four.py::test_four'
 
-        >> 'tests/test_five.py::test_five
+        >> 'tests/test_five.py::test_five'
         """
-        target_test_func_name = "test_five"
-        sorted_items = collection.needed_tests(target_test_func_name)
+        exp_tests = [
+            "tests/test_tree.py::test_tree",
+            "tests/test_one.py::test_one",
+            "tests/test_two.py::test_two",
+            "tests/test_four.py::test_four",
+        ]
+        sorted_items = collection.needed_tests(by)
         assert len(sorted_items) == 4  # the rest must cut
+        assert [item.nodeid for item in sorted_items] == exp_tests
+        assert collection.test_func is not None
+        assert collection.test_func.name == "test_five"
+        assert collection.test_func.nodeid == "tests/test_five.py::test_five"
+
+    def test_not_found_needed_tests(self, collection):
+        with pytest.raises(RuntimeError):
+            collection.needed_tests("tests/which/not_exist.py::test_fake")
+
+
+class TestSherlock(object):
+
+    @pytest.fixture()
+    def sherlock(self):
+        return Sherlock(config=mock.MagicMock(spec=Config))
+
+    def test_create_instance(self):
+        config = mock.MagicMock(spec=Config)  # pytest config
+        sherlock = Sherlock(config)
+        assert sherlock.config == config
+        assert isinstance(sherlock.bts_root, Root)
+        assert sherlock.tw is None
+
+    def test_first_call_terminal(self, sherlock):
+        assert sherlock.tw is None
+        assert sherlock.terminal is not None  # with cache
+        assert sherlock.tw is not None
+        sherlock.terminal.write("some line # 1")
+        sherlock.terminal.write("some line # 2")
+        sherlock.config.get_terminal_writer.assert_called_once()
+
+    def test_call_exist_terminal(self, sherlock):
+        sherlock.tw = mock.MagicMock()
+        assert sherlock.terminal is not None  # from cache
+        sherlock.terminal.write("some line # 1")
+        sherlock.terminal.write("some line # 2")
+        sherlock.config.get_terminal_writer.assert_not_called()
+
+    @pytest.mark.parametrize("line", ("123", 12), ids=["string", "integer"])
+    def test_write_step_to_terminal(self, sherlock, line):
+        sherlock.tw = mock.MagicMock()
+        sherlock.write_step(line)
+        sherlock.tw.line.assert_called_once()
+        sherlock.tw.write.assert_called_once_with("Step #{}:".format(line))

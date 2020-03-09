@@ -39,7 +39,7 @@ def refresh(item):
     return True
 
 
-class TestCollection(object):
+class Collection(object):
 
     def __init__(self, items):
         self.items = items
@@ -103,7 +103,7 @@ class Sherlock(object):
         :param List[_pytest.nodes.Item] items: list of item objects
         """
         if config.getoption("--flaky-test"):
-            test_collection = TestCollection(items)
+            test_collection = Collection(items)
             self.bts_root.insert(test_collection.needed_tests(config.option.flaky_test))
             items[:] = [test_collection.test_func]
         # outcome = yield

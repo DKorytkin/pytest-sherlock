@@ -48,13 +48,14 @@ class Collection(object):
             tests.append(test_func)
 
         if self.test_func is None:
+            # TODO make own error
             raise RuntimeError("Validate your test name (ex: 'tests/unit/test_one.py::test_first')")
 
         tests[:] = sorted(
             tests,
             key=lambda item: (
                 len(set(item.fixturenames) & set(self.test_func.fixturenames)),
-                item.parent.nodeid  # TODO add ast analise
+                item.parent.nodeid  # TODO add AST analise
             ),
             reverse=True,
         )
@@ -111,8 +112,10 @@ class Sherlock(object):
         # TODO add bts length
         return "Try to find coupled tests"
 
+    @pytest.hookimpl(hookwrapper=True)
     def pytest_runtest_protocol(self, item, nextitem):
         steps = 1
+        # TODO make ability works in base mode if option "flaky-test" not exist
         root = self.bts_root.root
         while root is not None:
             self.write_step(steps)
@@ -126,7 +129,7 @@ class Sherlock(object):
                     break
                 root = root.left
             steps += 1
-        return True
+        yield
 
     def call_items(self, target_item, items):
         for next_idx, test_func in enumerate(items, 1):

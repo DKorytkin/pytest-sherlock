@@ -111,12 +111,6 @@ class Sherlock(object):
         # TODO add bts length
         return "Try to find coupled tests"
 
-    @pytest.hookimpl(tryfirst=True, hookwrapper=True)
-    def pytest_runtest_makereport(self, item, call):
-        # execute all other hooks to obtain the report object
-        outcome = yield
-        rep = outcome.get_result()
-
     @pytest.hookimpl(hookwrapper=True)
     def pytest_runtest_protocol(self, item, nextitem):
         steps = 1
@@ -136,10 +130,8 @@ class Sherlock(object):
         return True
 
     def pytest_runtestloop(self, session):
-        if (session.testsfailed and
-                not session.config.option.continue_on_collection_errors):
-            raise session.Interrupted(
-                "%d errors during collection" % session.testsfailed)
+        if (session.testsfailed and not session.config.option.continue_on_collection_errors):
+            raise session.Interrupted("%d errors during collection" % session.testsfailed)
 
         if session.config.option.collectonly:
             return True
@@ -169,7 +161,7 @@ class Sherlock(object):
             reports = runtestprotocol(target_item, log=False)
             for report in reports:  # 3 reports: setup, call, teardown
                 if report.failed is True:
-                    report.outcome = 'coupled'
+                    # report.outcome = 'coupled'
                     self.refresh_state(item=target_item)
                     logger(report=report)
                     success.append(False)

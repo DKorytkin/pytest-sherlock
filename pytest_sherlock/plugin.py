@@ -27,3 +27,10 @@ def pytest_report_teststatus(report):
         return 'coupled', 'C', ('COUPLED', {'red': True})
     elif report.outcome == 'flaky':
         return 'flaky', 'F', ('FLAKY', {'yellow': True})
+
+
+# @pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    # execute all other hooks to obtain the report object
+    outcome = yield
+    rep = outcome.get_result()

@@ -104,7 +104,6 @@ class Sherlock(object):
             test_collection = Collection(items)
             self.bts_root.insert(test_collection.needed_tests(config.option.flaky_test))
             items[:] = [test_collection.test_func]
-        # outcome = yield
         yield
 
     @pytest.hookimpl(trylast=True)
@@ -115,7 +114,6 @@ class Sherlock(object):
     @pytest.hookimpl(hookwrapper=True)
     def pytest_runtest_protocol(self, item, nextitem):
         steps = 1
-        # TODO make ability works in base mode if option "flaky-test" not exist
         root = self.bts_root.root
         while root is not None:
             self.write_step(steps)
@@ -126,14 +124,31 @@ class Sherlock(object):
                 root = root.right
             else:
                 if len(current_tests) == 1:
-                    break
+                    return False
                 root = root.left
             steps += 1
-        yield
+        return True
+
+    def pytest_runtestloop(self, session):
+        if (session.testsfailed and
+                not session.config.option.continue_on_collection_errors):
+            raise session.Interrupted(
+                "%d errors during collection" % session.testsfailed)
+
+        if session.config.option.collectonly:
+            return True
+
+        for i, item in enumerate(session.items):
+            nextitem = session.items[i + 1] if i + 1 < len(session.items) else None
+            is_success = self.pytest_runtest_protocol(item=item, nextitem=nextitem)
+            if not is_success:
+                raise session.Failed("Found coupled tests")
+            if session.shouldstop:
+                raise session.Interrupted(session.shouldstop)
+        return True
 
     def call_items(self, target_item, items):
         for next_idx, test_func in enumerate(items, 1):
-            # refresh(test_func)  # TODO maybe need to refresh state for all previous tests
             with self.log(test_func) as logger:
                 next_item = items[next_idx] if next_idx < len(items) else target_item
                 reports = runtestprotocol(item=test_func, nextitem=next_item, log=False)

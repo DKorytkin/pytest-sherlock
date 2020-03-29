@@ -111,6 +111,12 @@ class Sherlock(object):
         # TODO add bts length
         return "Try to find coupled tests"
 
+    @pytest.hookimpl(tryfirst=True, hookwrapper=True)
+    def pytest_runtest_makereport(self, item, call):
+        # execute all other hooks to obtain the report object
+        outcome = yield
+        rep = outcome.get_result()
+
     @pytest.hookimpl(hookwrapper=True)
     def pytest_runtest_protocol(self, item, nextitem):
         steps = 1

@@ -67,6 +67,13 @@ class Sherlock(object):
         self.config = config
         self.bts_root = BTSRoot()
         self.tw = None
+        self._reporter = None
+
+    @property
+    def reporter(self):
+        if self._reporter is None:
+            self._reporter = self.config.pluginmanager.get_plugin("terminalreporter")
+        return self._reporter
 
     @property
     def terminal(self):
@@ -80,9 +87,9 @@ class Sherlock(object):
 
     @contextlib.contextmanager
     def log(self, item):
-        item.ihook.pytest_runtest_logstart(nodeid=item.nodeid, location=item.location)
+        self.reporter.pytest_runtest_logstart(nodeid=item.nodeid, location=item.location)
         yield item.ihook.pytest_runtest_logreport
-        item.ihook.pytest_runtest_logfinish(nodeid=item.nodeid, location=item.location)
+        self.reporter.pytest_runtest_logfinish(nodeid=item.nodeid)
 
     @staticmethod
     def refresh_state(item):
@@ -90,6 +97,10 @@ class Sherlock(object):
         _remove_cached_results_from_failed_fixtures(item)
         _remove_failed_setup_state_from_session(item)
         return True
+
+    def reset_progress(self, collection):
+        self.reporter._progress_nodeids_reported = set()
+        self.reporter._session.testscollected = len(collection) + 1  # current item
 
     @pytest.hookimpl(hookwrapper=True)
     def pytest_collection_modifyitems(self, session, config, items):
@@ -118,6 +129,7 @@ class Sherlock(object):
         while root is not None:
             self.write_step(steps)
             current_tests = root.left.value if root.left is not None else root.value
+            self.reset_progress(current_tests)
             self.call_items(target_item=item, items=current_tests)
             is_target_test_success = self.call_target(target_item=item)
             if is_target_test_success:
@@ -130,7 +142,7 @@ class Sherlock(object):
         return True
 
     def pytest_runtestloop(self, session):
-        if (session.testsfailed and not session.config.option.continue_on_collection_errors):
+        if session.testsfailed and not session.config.option.continue_on_collection_errors:
             raise session.Interrupted("%d errors during collection" % session.testsfailed)
 
         if session.config.option.collectonly:
@@ -161,7 +173,7 @@ class Sherlock(object):
             reports = runtestprotocol(target_item, log=False)
             for report in reports:  # 3 reports: setup, call, teardown
                 if report.failed is True:
-                    # report.outcome = 'coupled'
+                    report.outcome = 'coupled'
                     self.refresh_state(item=target_item)
                     logger(report=report)
                     success.append(False)

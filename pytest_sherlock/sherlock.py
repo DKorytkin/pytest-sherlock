@@ -2,7 +2,6 @@ import contextlib
 
 import pytest
 from _pytest.runner import runtestprotocol
-from _pytest.terminal import TerminalReporter
 
 from pytest_sherlock.binary_tree_search import Root as BTSRoot
 

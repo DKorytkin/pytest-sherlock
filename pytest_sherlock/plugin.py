@@ -1,4 +1,3 @@
-import pytest
 from pytest_sherlock.sherlock import Sherlock
 
 

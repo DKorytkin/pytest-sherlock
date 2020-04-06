@@ -96,8 +96,13 @@ class TestCollection(object):
 class TestSherlock(object):
 
     @pytest.fixture()
-    def sherlock(self):
-        return Sherlock(config=mock.MagicMock(spec=Config))
+    def config(self):
+        plugin_manager = mock.MagicMock()
+        return mock.MagicMock(spec=Config, pluginmanager=plugin_manager)
+
+    @pytest.fixture()
+    def sherlock(self, config):
+        return Sherlock(config=config)
 
     def test_create_instance(self):
         config = mock.MagicMock(spec=Config)  # pytest config
@@ -129,14 +134,20 @@ class TestSherlock(object):
         sherlock.tw.write.assert_called_once_with("Step #{}:".format(line))
 
     def test_log(self, sherlock, target_item):
-        with sherlock.log(target_item) as logger:
-            target_item.ihook.pytest_runtest_logstart.assert_called_once_with(
-                nodeid=target_item.nodeid, location=target_item.location
+        with mock.patch(
+                "pytest_sherlock.sherlock.Sherlock.reporter",
+                new_callable=mock.PropertyMock,
+        ) as m:
+            m.return_value = mock.MagicMock(**{"pytest_runtest_logreport.return_value": True})
+            with sherlock.log(target_item) as logger:
+                sherlock.reporter.pytest_runtest_logstart.assert_called_once_with(
+                    nodeid=target_item.nodeid, location=target_item.location
+                )
+                assert logger() is True
+            sherlock.reporter.pytest_runtest_logreport.assert_called_once()
+            sherlock.reporter.pytest_runtest_logfinish.assert_called_once_with(
+                nodeid=target_item.nodeid
             )
-            assert logger() is True
-        target_item.ihook.pytest_runtest_logfinish.assert_called_once_with(
-            nodeid=target_item.nodeid, location=target_item.location
-        )
 
     @pytest.mark.parametrize("by", ("name", "nodeid"))
     def test_pytest_collection_modifyitems_with_option(self, sherlock, items, target_item, by):

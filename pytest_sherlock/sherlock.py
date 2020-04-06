@@ -2,6 +2,7 @@ import contextlib
 
 import pytest
 from _pytest.runner import runtestprotocol
+from _pytest.terminal import TerminalReporter
 
 from pytest_sherlock.binary_tree_search import Root as BTSRoot
 
@@ -83,12 +84,13 @@ class Sherlock(object):
 
     def write_step(self, step):
         self.terminal.line()
+        # TODO need add process like: Step: [1 of 12]
         self.terminal.write("Step #{}:".format(step))
 
     @contextlib.contextmanager
     def log(self, item):
         self.reporter.pytest_runtest_logstart(nodeid=item.nodeid, location=item.location)
-        yield item.ihook.pytest_runtest_logreport
+        yield self.reporter.pytest_runtest_logreport
         self.reporter.pytest_runtest_logfinish(nodeid=item.nodeid)
 
     @staticmethod
@@ -101,6 +103,24 @@ class Sherlock(object):
     def reset_progress(self, collection):
         self.reporter._progress_nodeids_reported = set()
         self.reporter._session.testscollected = len(collection) + 1  # current item
+
+    def summary_coupled(self):
+        # TODO port class TerminalReporter and modify
+        if self.config.option.tbstyle != "no":
+            reports = self.reporter.getreports("coupled")
+            if not reports:
+                return
+            self.reporter.write_sep("=", "COUPLED")
+            last_report = reports[-1]
+            # TODO add info about coupled test
+            if self.config.option.tbstyle == "line":
+                line = self.reporter._getcrashline(last_report)
+                self.reporter.write_line(line)
+            else:
+                msg = self.reporter._getfailureheadline(last_report)
+                self.reporter.write_sep("_", msg, red=True, bold=True)
+                self.reporter._outrep_summary(last_report)
+                # self.reporter._handle_teardown_sections(last_report.nodeid)
 
     @pytest.hookimpl(hookwrapper=True)
     def pytest_collection_modifyitems(self, session, config, items):
@@ -119,8 +139,18 @@ class Sherlock(object):
 
     @pytest.hookimpl(trylast=True)
     def pytest_report_collectionfinish(self, config, startdir, items):
-        # TODO add bts length
+        # TODO add bts length, from 12 to 13 steps
         return "Try to find coupled tests"
+        # TODO need customize report
+
+    @pytest.hookimpl(hookwrapper=True)
+    def pytest_terminal_summary(self, terminalreporter):
+        self.summary_coupled()
+        yield
+        terminalreporter.summary_failures()
+        terminalreporter.summary_errors()
+        terminalreporter.summary_warnings()
+        terminalreporter.summary_passes()
 
     @pytest.hookimpl(hookwrapper=True)
     def pytest_runtest_protocol(self, item, nextitem):
@@ -128,6 +158,7 @@ class Sherlock(object):
         root = self.bts_root.root
         while root is not None:
             self.write_step(steps)
+            # TODO need little bit refactor BTS, add sugar
             current_tests = root.left.value if root.left is not None else root.value
             self.reset_progress(current_tests)
             self.call_items(target_item=item, items=current_tests)

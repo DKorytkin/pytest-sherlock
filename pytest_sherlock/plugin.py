@@ -20,7 +20,7 @@ def pytest_configure(config):
         return
 
     config.sherlock = Sherlock(config)
-    config.pluginmanager.register(config.sherlock)
+    config.pluginmanager.register(config.sherlock, "sherlock")
 
 
 def pytest_report_teststatus(report):

@@ -33,23 +33,37 @@ pytest tests/exmaple/test_c_delete.py tests/exmaple/test_b_modify.py tests/exmap
 ```
 Plugin didn't run all tests, it try to find some possible guilty test and will run first
 ```bash
-======================================================================================== test session starts ========================================================================================
+======================= test session starts =======================
 collected 10 items                                                                                                                                                                                  
 Try to find coupled tests
 
 Step #1:
-tests/exmaple/test_b_modify.py::test_modify_random_param PASSED                                                                                                                               [100%]
-tests/exmaple/test_c_delete.py::test_delete_random_param PASSED                                                                                                                               [200%]
-tests/exmaple/test_c_delete.py::test_deleted_passed PASSED                                                                                                                                    [300%]
-tests/exmaple/test_c_delete.py::test_do_not_delete PASSED                                                                                                                                     [400%]
-tests/exmaple/test_all_read.py::test_read_params COUPLED                                                                                                                                      [500%]
+tests/exmaple/test_b_modify.py::test_modify_random_param PASSED                                                                                                                               [ 20%]
+tests/exmaple/test_c_delete.py::test_delete_random_param PASSED                                                                                                                               [ 40%]
+tests/exmaple/test_c_delete.py::test_deleted_passed PASSED                                                                                                                                    [ 60%]
+tests/exmaple/test_c_delete.py::test_do_not_delete PASSED                                                                                                                                     [ 80%]
+tests/exmaple/test_all_read.py::test_read_params COUPLED                                                                                                                                      [100%]
 Step #2:
-tests/exmaple/test_b_modify.py::test_modify_random_param PASSED                                                                                                                               [500%]
-tests/exmaple/test_c_delete.py::test_delete_random_param PASSED                                                                                                                               [500%]
-tests/exmaple/test_all_read.py::test_read_params COUPLED                                                                                                                                      [500%]
+tests/exmaple/test_b_modify.py::test_modify_random_param PASSED                                                                                                                               [ 33%]
+tests/exmaple/test_c_delete.py::test_delete_random_param PASSED                                                                                                                               [ 66%]
+tests/exmaple/test_all_read.py::test_read_params COUPLED                                                                                                                                      [100%]
 Step #3:
-tests/exmaple/test_b_modify.py::test_modify_random_param PASSED                                                                                                                               [500%]
-tests/exmaple/test_all_read.py::test_read_params COUPLED 
+tests/exmaple/test_b_modify.py::test_modify_random_param PASSED                                                                                                                               [ 50%]
+tests/exmaple/test_all_read.py::test_read_params COUPLED                                                                                                                                      [100%]
+
+========================= COUPLED =========================
+____________________ test_read_params _____________________
+
+config = {'a': 1, 'b': 13, 'c': 3}, param = 'b'
+
+    def test_read_params(config, param):
+>       assert config.get(param) == 2
+E       AssertionError: assert 13 == 2
+E        +  where 13 = <built-in method get of dict object at 0x10edb54b0>('b')
+E        +    where <built-in method get of dict object at 0x10edb54b0> = {'a': 1, 'b': 13, 'c': 3}.get
+
+tests/exmaple/test_all_read.py:8: AssertionError
+================================================================================ 7 passed, 3 coupled in 0.07 seconds ================================================================================ 
 ```
 
 ### TODO

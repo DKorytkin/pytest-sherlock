@@ -51,8 +51,8 @@ Step #3:
 tests/exmaple/test_b_modify.py::test_modify_random_param PASSED                                                                                                                               [ 50%]
 tests/exmaple/test_all_read.py::test_read_params COUPLED                                                                                                                                      [100%]
 
-========================= COUPLED =========================
-____________________ test_read_params _____________________
+============================= COUPLED ==============================
+_________________________ test_read_params _________________________
 
 config = {'a': 1, 'b': 13, 'c': 3}, param = 'b'
 
@@ -63,7 +63,7 @@ E        +  where 13 = <built-in method get of dict object at 0x10edb54b0>('b')
 E        +    where <built-in method get of dict object at 0x10edb54b0> = {'a': 1, 'b': 13, 'c': 3}.get
 
 tests/exmaple/test_all_read.py:8: AssertionError
-================================================================================ 7 passed, 3 coupled in 0.07 seconds ================================================================================ 
+=============== 7 passed, 3 coupled in 0.07 seconds ================== 
 ```
 
 ### TODO

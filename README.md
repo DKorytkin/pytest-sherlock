@@ -36,7 +36,6 @@ Plugin didn't run all tests, it try to find some possible guilty test and will r
 ======================= test session starts =======================
 collected 10 items                                                                                                                                                                                  
 Try to find coupled tests
-
 Step #1:
 tests/exmaple/test_b_modify.py::test_modify_random_param PASSED                                                                                                                               [ 20%]
 tests/exmaple/test_c_delete.py::test_delete_random_param PASSED                                                                                                                               [ 40%]
@@ -51,19 +50,24 @@ Step #3:
 tests/exmaple/test_b_modify.py::test_modify_random_param PASSED                                                                                                                               [ 50%]
 tests/exmaple/test_all_read.py::test_read_params COUPLED                                                                                                                                      [100%]
 
-============================= COUPLED ==============================
-_________________________ test_read_params _________________________
+======================== found coupled in 0.08 seconds ========================
+found coupled tests: 
+         - tests/exmaple/test_b_modify.py::test_modify_random_param
+         - tests/exmaple/test_all_read.py::test_read_params
+
+pytest -l -vv tests/exmaple/test_b_modify.py::test_modify_random_param tests/exmaple/test_all_read.py::test_read_params
+_____________________________ test_read_params __________________________________
 
 config = {'a': 1, 'b': 13, 'c': 3}, param = 'b'
 
     def test_read_params(config, param):
 >       assert config.get(param) == 2
 E       AssertionError: assert 13 == 2
-E        +  where 13 = <built-in method get of dict object at 0x10edb54b0>('b')
-E        +    where <built-in method get of dict object at 0x10edb54b0> = {'a': 1, 'b': 13, 'c': 3}.get
+E        +  where 13 = <built-in method get of dict object at 0x107c464b0>('b')
+E        +    where <built-in method get of dict object at 0x107c464b0> = {'a': 1, 'b': 13, 'c': 3}.get
 
 tests/exmaple/test_all_read.py:8: AssertionError
-=============== 7 passed, 3 coupled in 0.07 seconds ================== 
+======================= 7 passed, 3 coupled in 0.08 seconds ======================= 
 ```
 
 ### TODO

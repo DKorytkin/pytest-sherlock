@@ -109,15 +109,14 @@ class TestSherlock(object):
         sherlock = Sherlock(config)
         assert sherlock.config == config
         assert isinstance(sherlock.bts_root, Root)
-        assert sherlock.tw is None
+        assert sherlock._tw is None
+        assert sherlock._reporter is None
+        assert sherlock._coupled is None
 
     def test_first_call_terminal(self, sherlock):
-        assert sherlock.tw is None
-        assert sherlock.terminal is not None  # with cache
-        assert sherlock.tw is not None
-        sherlock.terminal.write("some line # 1")
-        sherlock.terminal.write("some line # 2")
-        sherlock.config.get_terminal_writer.assert_called_once()
+        assert sherlock._tw is None
+        assert callable(sherlock.terminal)
+        assert sherlock._tw is sherlock.terminal
 
     def test_call_exist_terminal(self, sherlock):
         sherlock.tw = mock.MagicMock()
@@ -128,10 +127,10 @@ class TestSherlock(object):
 
     @pytest.mark.parametrize("line", ("123", 12), ids=["string", "integer"])
     def test_write_step_to_terminal(self, sherlock, line):
-        sherlock.tw = mock.MagicMock()
+        sherlock._tw = mock.MagicMock()
         sherlock.write_step(line)
-        sherlock.tw.line.assert_called_once()
-        sherlock.tw.write.assert_called_once_with("Step #{}:".format(line))
+        sherlock.reporter.ensure_newline.assert_called_once()
+        sherlock._tw.write.assert_called_once_with("Step #{}:".format(line), yellow=True, bold=True)
 
     def test_log(self, sherlock, target_item):
         with mock.patch(

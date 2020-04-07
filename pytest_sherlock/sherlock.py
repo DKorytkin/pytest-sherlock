@@ -1,9 +1,61 @@
 import contextlib
+import time
 
 import pytest
+from _pytest.main import (
+    EXIT_OK,
+    EXIT_TESTSFAILED,
+    EXIT_INTERRUPTED,
+    EXIT_USAGEERROR,
+    EXIT_NOTESTSCOLLECTED,
+)
 from _pytest.runner import runtestprotocol
 
 from pytest_sherlock.binary_tree_search import Root as BTSRoot
+
+
+PYTEST_EXIT_CODES = (
+    EXIT_OK,
+    EXIT_TESTSFAILED,
+    EXIT_INTERRUPTED,
+    EXIT_USAGEERROR,
+    EXIT_NOTESTSCOLLECTED,
+)
+
+
+def build_summary_stats_line(stats):
+    keys = [
+        "failed", "passed", "skipped", "deselected", "xfailed", "xpassed", "warnings", "error",
+        "coupled", "flaky",
+    ]
+
+    unknown_key_seen = False
+    for key in stats.keys():
+        if key not in keys:
+            if key:  # setup/teardown reports have an empty key, ignore them
+                keys.append(key)
+                unknown_key_seen = True
+    parts = []
+    for key in keys:
+        val = stats.get(key, None)
+        if val:
+            parts.append("%d %s" % (len(val), key))
+
+    if parts:
+        line = "found coupled"
+    else:
+        line = "no tests ran"
+
+    if "coupled" in keys or "failed" in stats or "error" in stats:
+        color = 'red'
+    elif ("warnings" in stats or "flaky" in keys) or unknown_key_seen:
+        color = "yellow"
+    elif "passed" in stats:
+        color = "green"
+    else:
+        color = "yellow"
+
+    return line, color
 
 
 def _remove_cached_results_from_failed_fixtures(item):
@@ -66,8 +118,9 @@ class Sherlock(object):
     def __init__(self, config):
         self.config = config
         self.bts_root = BTSRoot()
-        self.tw = None
+        self._tw = None
         self._reporter = None
+        self._coupled = None
 
     @property
     def reporter(self):
@@ -77,14 +130,15 @@ class Sherlock(object):
 
     @property
     def terminal(self):
-        if self.tw is None:
-            self.tw = self.config.get_terminal_writer()
-        return self.tw
+        if self._tw is None:
+            self._tw = self.reporter.writer
+        return self._tw
 
     def write_step(self, step):
-        self.terminal.line()
+        self.reporter.ensure_newline()
+        # self.terminal.sep(sep, title, **markup)
         # TODO need add process like: Step: [1 of 12]
-        self.terminal.write("Step #{}:".format(step))
+        self.terminal.write("Step #{}:".format(step), yellow=True, bold=True)
 
     @contextlib.contextmanager
     def log(self, item):
@@ -109,17 +163,29 @@ class Sherlock(object):
             reports = self.reporter.getreports("coupled")
             if not reports:
                 return
-            self.reporter.write_sep("=", "COUPLED")
             last_report = reports[-1]
-            # TODO add info about coupled test
-            if self.config.option.tbstyle == "line":
-                line = self.reporter._getcrashline(last_report)
-                self.reporter.write_line(line)
-            else:
-                msg = self.reporter._getfailureheadline(last_report)
-                self.reporter.write_sep("_", msg, red=True, bold=True)
-                self.reporter._outrep_summary(last_report)
-                # self.reporter._handle_teardown_sections(last_report.nodeid)
+            if self._coupled:
+                coupled_test_names = [t.nodeid for t in self._coupled + [last_report]]
+                msg = "found coupled tests: \n\t - {coupled}\n\npytest -l -vv {tests}\n".format(
+                    coupled="\n\t - ".join(coupled_test_names),
+                    tests=" ".join(coupled_test_names),
+                )
+                self.reporter.write(msg, red=True)
+
+            msg = self.reporter._getfailureheadline(last_report)
+            self.reporter.write_sep("_", msg, red=True, bold=True)
+            self.reporter._outrep_summary(last_report)
+
+    def summary_stats(self):
+        session_duration = time.time() - self.reporter._sessionstarttime
+        line, color = build_summary_stats_line(self.reporter.stats)
+        msg = "%s in %.2f seconds" % (line, session_duration)
+        markup = {color: True, 'bold': True}
+
+        if self.reporter.verbosity >= 0:
+            self.reporter.write_sep("=", msg, **markup)
+        if self.reporter.verbosity == -1:
+            self.reporter.write_line(msg, **markup)
 
     @pytest.hookimpl(hookwrapper=True)
     def pytest_collection_modifyitems(self, session, config, items):
@@ -140,10 +206,11 @@ class Sherlock(object):
     def pytest_report_collectionfinish(self, config, startdir, items):
         # TODO add bts length, from 12 to 13 steps
         return "Try to find coupled tests"
-        # TODO need customize report
 
     @pytest.hookimpl(hookwrapper=True)
     def pytest_terminal_summary(self, terminalreporter):
+        if self._coupled:
+            self.summary_stats()
         self.summary_coupled()
         yield
         terminalreporter.summary_failures()
@@ -166,6 +233,7 @@ class Sherlock(object):
                 root = root.right
             else:
                 if len(current_tests) == 1:
+                    self._coupled = current_tests
                     return False
                 root = root.left
             steps += 1

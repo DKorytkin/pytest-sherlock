@@ -20,8 +20,8 @@ after_success:
 deploy:
   provider: pypi
   distributions: sdist bdist_wheel
-  user: __token__
-  password: pypi-AgEIcHlwaS5vcmcCJGE1Yjc4NGE4LWQ1MzMtNGFmYS05Y2NhLTA1OTQ1NzRhMzFlYwACJXsicGVybWlzc2lvbnMiOiAidXNlciIsICJ2ZXJzaW9uIjogMX0AAAYgGNRu-XeJuBKhu917ld1pIuoYXBRNt30kgCYHxpQFA6I
+  user: "${PYPI_USER}"
+  password: "${PYPI_TOKEN}"
   on:
     tags: true
     python: 2.7

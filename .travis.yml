@@ -6,18 +6,23 @@ python:
 - '3.6'
 - '3.7'
 - '3.8'
+
 install:
 - pip install -r requirements-dev.txt
+
 script:
 - flake8 pytest_sherlock --max-line-length=100
 - pytest tests/ --ignore="tests/exmaple" -vv --cov-report xml --cov=pytest_sherlock
+
 after_success:
 - bash <(curl -s https://codecov.io/bash) -t "$CODECOV_TOKEN"
+
 deploy:
   provider: pypi
   distributions: sdist bdist_wheel
   user: __token__
-  password: pypi-AgEIcHlwaS5vcmcCJGE1Yjc4NGE4LWQ1MzMtNGFmYS05Y2NhLTA1OTQ1NzRhMzFlYwACJXsicGVybWlzc2lvbnMiOiAidXNlciIsICJ2ZXJzaW9uIjogMX0AAAYgGNRu-XeJuBKhu917ld1pIuoYXBRNt30kgCYHxpQFA6I
+  password:
+    secure: WZL1FHw65SiMfdC+hNrnMvrcNcocIr253qVaszyBYj6scZ7mS/U50t2VY/Ldq6wwshTZsHpuonAFhxjDWEpREF/tB3HACKePJYWIsNfAf9IxcMKMKs7peC4VN5S+JOCUfArFfbx4T217wAhAhrxZMljEVDJOFZv+MKn4PUzre1gxSpaSgH02gWjZGHqsWGQnKgVZlOjiHoZ+TYcvf/Vv28yBu6nKCMF2IeJGs204HpL1Gmcdo7BdcIBquWR9gK8Gsj0o/tkeu306umn7UY7YB78GHdsmj9GpsvdIxagnV2BVyN8o5zAXbHzZHr5JaKlY1e03oXvyyrMYMla8l6I8c1XYjsAMb/E94Zu67MPSkcK2P/gnL972fPYRgDtUry72RsVrkdc+Wg9PDRH1n96hxKe1OTcLF+LrxvwQxHXuxblgKKKmHh24BhphpSEtKbKPXE0KRtxIuvYcE91wPDzds7oDxLUWY41GkTxo6mGK9hqFi8dYiGMMC/z65Yp7Wc7la65IIx6R03V/K/Lys35NOQ9CxpVHErzCHR3CcKA1ThfXrLKDIAilMW19nIxLfXEMYHltTtMkDmfGeuImDXhYaIxLdY9BlQGIHwz1RfKoSHbuOLzS5RTtWklWt80cUFZzqyXpQIp15mMqFAQ7XeU0xvNRsbIhOQsLi+Xym/rEYy8=
   on:
     tags: true
     python: 2.7

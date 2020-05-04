@@ -1,28 +1,24 @@
 sudo: enabled
 dist: xenial
 language: python
-
 python:
 - '2.7'
 - '3.6'
 - '3.7'
 - '3.8'
-
 install:
 - pip install -r requirements-dev.txt
-
 script:
 - flake8 pytest_sherlock --max-line-length=100
 - pytest tests/ --ignore="tests/exmaple" -vv --cov-report xml --cov=pytest_sherlock
-
 after_success:
 - bash <(curl -s https://codecov.io/bash) -t "$CODECOV_TOKEN"
-
 deploy:
   provider: pypi
   distributions: sdist bdist_wheel
-  user: "d.korytkin"
-  password: kT8UgU3k6bsmueQowQbn3q37IBbQnQMBu9xvO8y/gkKGsVfljRDdtLMPG46eW7YewVpYa8nqawDBf3T+1Vgveu/eHRClqujDBGq/Wbeav3UFa+KPTkkQOEWPyNRTGU3NcLaeI7EqI9j2oO9FOWTqj4mWmi4fAwkk/rkjBUI9eh9byCSVHR2rnx14FP0fLf1MKpYVR7bCN2LLpbWMMAsxtWktenfGxnk9y0GstZxADFLVxcF7b6yIPIm4P04BP3z4eJMhBnY+TvkhYEjoKAyaaMhUhfGQqfZ/lGT1PO/ydqO3E57jEA5YYD+dQ6DwQ9da42pKdnpE4mKaRShQRzdeop6ryYWtax0UFN5KFW4r0viGPCiJyKoeb37q7otFT+6lZY6Fxj3rNACuW9zbywMiAyJOe0kJqVDt3U8pMvV1eiaFJs+DLwHPk/y3092FllyMx7bF0yt8pI6csZI3wtqNGwcyvLdLYaQyRYmMh37QiBLhGWOllltRwm7GL5fO3DyumLc9n2gUo+op1pjLoJTXvgFSbHg3RNcRdEvoR12MbTuFFthY3nYB3g0t52MGxBGXG2jX5OS/vAFJKw6DCGqdy5E6Wqnz8LQNnOfQb0Vv1vS8Zb6s29u2xour2TowEwAqZ2eMSechNDF2g6NwA4M0kaRHR8JgumaBziyG1eayKfs=
+  user: d.korytkin
+  password:
+    secure: I7f07zgeyuplKWE5uKKO+thCNYhjE8nWAZT76f91dAdbxcy8lkhtyp3Gm2Qhh3iuPCIjmobjXQKouHdZ97bFvSn8F3chwMMuK96qUuSM+5zBvybRvImjpXNgIrCh+4IYjt2wt1EChLrgUUdZTYyojo/oZLtGgknnrC7UP4EMYcZY33MbajkimbIegZt0+m2jFs2IvBOSDPCsIQkI1k6danc/Eo6Y1xxemQ7OEqcQ/dZ4KzUmmZ3M+ZMsDueyIk0OtdisCz/MNqfqOwZThZG9tMghrF+HR3aD6bNEVfoTJHloSjqgmUrRx4FWoa62YDHi3nMbnKmW37ceVzHkmTjpkRCOlVm2ELQNtXdoC12d6F+KAQ9RNPYVfcrgoMC2I6DNhoEuObTwydS9hURjcAd47eOWof52icEzyxNe6/pkwM6l2N+AWlC+rh3q38gXgEU8jFCHXjHPKEmNPGtPgjLtt9/JH4ud3MDpniP4M0stxDxosm2n36tiZmixOpvJaq7XhMiBYWM0YbIsi8DiK2quMV0BQKh10CpNqx/Swt/kXyTpctL77FcPWXdjpihkOb7X/0ong73QGXrGua9Q/Jb9hNAqMD6lG58FGthimA5DS2eyv/nl5N/FXj/Qz5sCqZAzYrmRuHt0SoRNJjKMKCNq8A8Gq7Qoslt3TEZOGdsdF4s=
   on:
     tags: true
     python: 2.7

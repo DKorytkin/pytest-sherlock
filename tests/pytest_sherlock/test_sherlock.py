@@ -108,7 +108,6 @@ class TestSherlock(object):
         config = mock.MagicMock(spec=Config)  # pytest config
         sherlock = Sherlock(config)
         assert sherlock.config == config
-        assert isinstance(sherlock.bts_root, Root)
         assert sherlock._tw is None
         assert sherlock._reporter is None
         assert sherlock._coupled is None
@@ -160,9 +159,6 @@ class TestSherlock(object):
         )
         assert items == [target_item]
         config.getoption.assert_called_once()
-        assert isinstance(sherlock.bts_root, Root)
-        assert sherlock.bts_root.root is not None
-        assert isinstance(sherlock.bts_root.root, Node)
 
     @pytest.mark.parametrize("by", ("name", "nodeid"))
     def test_pytest_collection_modifyitems_without_option(self, sherlock, items, target_item, by):
@@ -176,8 +172,6 @@ class TestSherlock(object):
         )
         assert items == items
         config.getoption.assert_called_once()
-        assert isinstance(sherlock.bts_root, Root)
-        assert sherlock.bts_root.root is None
 
     def test_pytest_report_collectionfinish(self, sherlock, items):
         report = sherlock.pytest_report_collectionfinish(

@@ -169,8 +169,8 @@ class Collection(object):
 class Sherlock(object):
     def __init__(self, config):
         self.config = config
+        # TODO add tests
         self.collection = None
-        self.bts_root = BTSRoot()
         self._tw = None
         self._reporter = None
         self._coupled = None

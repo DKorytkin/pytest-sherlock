@@ -118,6 +118,7 @@ class Collection(object):
     def make(self, test_name):
         items = self.needed_tests(test_name)
         self._bts.insert(items)
+        self.__current_root = self._bts.root
 
     def set_current_status(self, status):
         if status is True:
@@ -127,9 +128,10 @@ class Collection(object):
 
     def get_current_tests(self):
         if self.__current_root is None:
-            self.__current_root = self._bts.root
+            return
         if self.__current_root.left is not None:
             return self.__current_root.left.items
+        return self.__current_root.items
 
 
 class Sherlock(object):
@@ -256,10 +258,11 @@ class Sherlock(object):
             self.reset_progress(current_tests)
             self.call_items(target_item=item, items=current_tests)
             is_target_test_success = self.call_target(target_item=item)
-            self.collection.set_current_status(is_target_test_success)
             if len(current_tests) == 1 and not is_target_test_success:
                 self._coupled = [current_tests[0], item]
+                break
             steps += 1
+            self.collection.set_current_status(is_target_test_success)
             current_tests = self.collection.get_current_tests()
         return is_target_test_success
 

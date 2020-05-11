@@ -51,10 +51,15 @@ tests/exmaple/test_b_modify.py::test_modify_random_param PASSED                 
 tests/exmaple/test_all_read.py::test_read_params COUPLED                                                                                                                                      [100%]
 
 ======================== found coupled in 0.08 seconds ========================
-found coupled tests: 
-         - tests/exmaple/test_b_modify.py::test_modify_random_param
-         - tests/exmaple/test_all_read.py::test_read_params
+found coupled tests:
+tests/exmaple/test_b_modify.py::test_modify_random_param
+tests/exmaple/test_all_read.py::test_read_params
 
+Common fixtures:
+config
+param
+
+How to reproduce:
 pytest -l -vv tests/exmaple/test_b_modify.py::test_modify_random_param tests/exmaple/test_all_read.py::test_read_params
 _____________________________ test_read_params __________________________________
 

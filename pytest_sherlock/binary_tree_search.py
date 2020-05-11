@@ -31,3 +31,18 @@ class Root(object):
         if right:
             current_root.right = Node(right)
             self._insert(right, current_root.right)
+
+    def _length(self, node):
+        if node is None:
+            return -1
+        left = self._length(node.left)
+        right = self._length(node.right)
+        return max([left, right]) + 1
+
+    def length(self):
+        if self.root is None:
+            return 0
+        return self._length(self.root)
+
+    def __len__(self):
+        return self.length()

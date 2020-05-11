@@ -132,8 +132,7 @@ class Collection(object):
         return tests
 
     def __len__(self):
-        # TODO replace to BTS len
-        return len(self.items)
+        return len(self._bts)
 
     def __iter__(self):
         return self
@@ -187,11 +186,11 @@ class Sherlock(object):
             self._tw = self.reporter.writer
         return self._tw
 
-    def write_step(self, step):
+    def write_step(self, step, maximum):
         self.reporter.ensure_newline()
         # self.terminal.sep(sep, title, **markup)
         # TODO need add process like: Step: [1 of 12]
-        self.terminal.write("Step #{}:".format(step), yellow=True, bold=True)
+        self.terminal.write("Step: [{} of {}]:".format(step, maximum), yellow=True, bold=True)
 
     @contextlib.contextmanager
     def log(self, item):
@@ -269,8 +268,8 @@ class Sherlock(object):
 
     @pytest.hookimpl(trylast=True)
     def pytest_report_collectionfinish(self, config, startdir, items):
-        # TODO add bts length, from 12 to 13 steps
-        return "Try to find coupled tests"
+        length = len(self.collection)
+        return "Try to find coupled tests in [{}-{}] steps".format(length, length + 1)
 
     @pytest.hookimpl(hookwrapper=True)
     def pytest_terminal_summary(self, terminalreporter):
@@ -285,8 +284,9 @@ class Sherlock(object):
 
     @pytest.hookimpl(hookwrapper=True)
     def pytest_runtest_protocol(self, item, nextitem):
+        max_length = len(self.collection) + 1
         for step, bucket in enumerate(self.collection, start=1):
-            self.write_step(step)
+            self.write_step(step, max_length)
             self.reset_progress(bucket)
             self.call_items(target_item=item, items=bucket)
             bucket.is_success = self.call_target(target_item=item)

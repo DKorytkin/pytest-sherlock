@@ -81,7 +81,7 @@ class TestCollection(object):
             "tests/test_two.py::test_two",
             "tests/test_four.py::test_four",
         ]
-        sorted_items = collection.needed_tests(by)
+        sorted_items = collection._needed_tests(by)
         assert len(sorted_items) == 4  # the rest must cut
         assert [item.nodeid for item in sorted_items] == exp_tests
         assert collection.test_func is not None
@@ -90,7 +90,7 @@ class TestCollection(object):
 
     def test_not_found_needed_tests(self, collection):
         with pytest.raises(RuntimeError):
-            collection.needed_tests("tests/which/not_exist.py::test_fake")
+            collection._needed_tests("tests/which/not_exist.py::test_fake")
 
 
 class TestSherlock(object):

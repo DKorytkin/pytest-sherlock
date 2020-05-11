@@ -85,6 +85,37 @@ def _remove_failed_setup_state_from_session(item):
     return True
 
 
+class Bucket(object):
+    def __init__(self, items):
+        self.items = items
+        self.__current = 0
+        self.is_success = False
+
+    def __len__(self):
+        return len(self.items)
+
+    def __iter__(self):
+        return self
+
+    def __getitem__(self, item):
+        return self.items[item]
+
+    def __repr__(self):
+        return str(self.items)
+
+    def __str__(self):
+        return "<Bucket items={}>".format(len(self.items))
+
+    def next(self):
+        if self.__current < len(self.items):
+            item = self.items[self.__current]
+            self.__current += 1
+            return item
+
+        self.__current = 0
+        raise StopIteration
+
+
 class Collection(object):
 
     def __init__(self, items):
@@ -92,8 +123,9 @@ class Collection(object):
         self.test_func = None
         self._bts = BTSRoot()
         self.__current_root = None
+        self.__last = None
 
-    def needed_tests(self, test_name):
+    def _needed_tests(self, test_name):
         tests = []
         for test_func in self.items:
             if test_func.name == test_name or test_func.nodeid == test_name:
@@ -115,23 +147,39 @@ class Collection(object):
         )
         return tests
 
-    def make(self, test_name):
-        items = self.needed_tests(test_name)
+    def __len__(self):
+        # TODO replace to BTS len
+        return len(self.items)
+
+    def __iter__(self):
+        return self
+
+    def next(self):
+        if self.__last is not None:
+            self._set_current_status(self.__last.is_success)
+            self.__last = self._get_current_tests()
+            return self.__last
+
+        self.__last = self._get_current_tests()
+        return self.__last
+
+    def prepare(self, test_name):
+        items = self._needed_tests(test_name)
         self._bts.insert(items)
         self.__current_root = self._bts.root
 
-    def set_current_status(self, status):
+    def _set_current_status(self, status):
         if status is True:
             self.__current_root = self.__current_root.right
         else:
             self.__current_root = self.__current_root.left
 
-    def get_current_tests(self):
+    def _get_current_tests(self):
         if self.__current_root is None:
             return
         if self.__current_root.left is not None:
-            return self.__current_root.left.items
-        return self.__current_root.items
+            return Bucket(self.__current_root.left.items)
+        return Bucket(self.__current_root.items)
 
 
 class Sherlock(object):
@@ -178,6 +226,23 @@ class Sherlock(object):
         self.reporter._progress_nodeids_reported = set()
         self.reporter._session.testscollected = len(collection) + 1  # current item
 
+    def write_coupled_report(self):
+        # TODO can I get info about modified common fixtures?
+        coupled_test_names = [t.nodeid.replace("::()::", "::") for t in self._coupled]
+        common_fixtures = set.intersection(*[set(t.fixturenames) for t in self._coupled])
+        msg = (
+            "found coupled tests:\n"
+            "{coupled}\n\n"
+            "Common fixtures:\n"
+            "{common_fixtures}\n\n"
+            "How to reproduce:\npytest -l -vv {tests}\n"
+        ).format(
+            coupled="\n".join(coupled_test_names),
+            tests=" ".join(coupled_test_names),
+            common_fixtures="\n".join(common_fixtures) if common_fixtures else ""
+        )
+        self.reporter.write(msg, red=True)
+
     def summary_coupled(self):
         # TODO port class TerminalReporter and modify
         if self.config.option.tbstyle != "no":
@@ -186,21 +251,7 @@ class Sherlock(object):
                 return
             last_report = reports[-1]
             if self._coupled:
-                # TODO can I get info about modified common fixtures?
-                coupled_test_names = [t.nodeid for t in self._coupled]
-                common_fixtures = set.intersection(*[set(t.fixturenames) for t in self._coupled])
-                msg = (
-                    "found coupled tests:\n"
-                    "{coupled}\n\n"
-                    "Common fixtures:\n"
-                    "{common_fixtures}\n\n"
-                    "How to reproduce:\npytest -l -vv {tests}\n"
-                ).format(
-                    coupled="\n".join(coupled_test_names),
-                    tests=" ".join(coupled_test_names),
-                    common_fixtures="\n".join(common_fixtures) if common_fixtures else ""
-                )
-                self.reporter.write(msg, red=True)
+                self.write_coupled_report()
 
             msg = self.reporter._getfailureheadline(last_report)
             self.reporter.write_sep("_", msg, red=True, bold=True)
@@ -228,7 +279,7 @@ class Sherlock(object):
         """
         if config.getoption("--flaky-test"):
             self.collection = Collection(items)
-            self.collection.make(config.option.flaky_test)
+            self.collection.prepare(config.option.flaky_test)
             items[:] = [self.collection.test_func]
         yield
 
@@ -250,21 +301,14 @@ class Sherlock(object):
 
     @pytest.hookimpl(hookwrapper=True)
     def pytest_runtest_protocol(self, item, nextitem):
-        steps = 1
-        is_target_test_success = True
-        current_tests = self.collection.get_current_tests()
-        while current_tests:
-            self.write_step(steps)
-            self.reset_progress(current_tests)
-            self.call_items(target_item=item, items=current_tests)
-            is_target_test_success = self.call_target(target_item=item)
-            if len(current_tests) == 1 and not is_target_test_success:
-                self._coupled = [current_tests[0], item]
+        for step, bucket in enumerate(self.collection, start=1):
+            self.write_step(step)
+            self.reset_progress(bucket)
+            self.call_items(target_item=item, items=bucket)
+            bucket.is_success = self.call_target(target_item=item)
+            if len(bucket) == 1 and not bucket.is_success:
+                self._coupled = [bucket[0], item]
                 break
-            steps += 1
-            self.collection.set_current_status(is_target_test_success)
-            current_tests = self.collection.get_current_tests()
-        return is_target_test_success
 
     def pytest_runtestloop(self, session):
         if session.testsfailed and not session.config.option.continue_on_collection_errors:

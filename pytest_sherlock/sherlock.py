@@ -90,6 +90,8 @@ class Collection(object):
     def __init__(self, items):
         self.items = items
         self.test_func = None
+        self._bts = BTSRoot()
+        self.__current_root = None
 
     def needed_tests(self, test_name):
         tests = []
@@ -113,10 +115,27 @@ class Collection(object):
         )
         return tests
 
+    def make(self, test_name):
+        items = self.needed_tests(test_name)
+        self._bts.insert(items)
+
+    def set_current_status(self, status):
+        if status is True:
+            self.__current_root = self.__current_root.right
+        else:
+            self.__current_root = self.__current_root.left
+
+    def get_current_tests(self):
+        if self.__current_root is None:
+            self.__current_root = self._bts.root
+        if self.__current_root.left is not None:
+            return self.__current_root.left.items
+
 
 class Sherlock(object):
     def __init__(self, config):
         self.config = config
+        self.collection = None
         self.bts_root = BTSRoot()
         self._tw = None
         self._reporter = None
@@ -165,10 +184,19 @@ class Sherlock(object):
                 return
             last_report = reports[-1]
             if self._coupled:
-                coupled_test_names = [t.nodeid for t in self._coupled + [last_report]]
-                msg = "found coupled tests: \n\t - {coupled}\n\npytest -l -vv {tests}\n".format(
-                    coupled="\n\t - ".join(coupled_test_names),
+                # TODO can I get info about modified common fixtures?
+                coupled_test_names = [t.nodeid for t in self._coupled]
+                common_fixtures = set.intersection(*[set(t.fixturenames) for t in self._coupled])
+                msg = (
+                    "found coupled tests:\n"
+                    "{coupled}\n\n"
+                    "Common fixtures:\n"
+                    "{common_fixtures}\n\n"
+                    "How to reproduce:\npytest -l -vv {tests}\n"
+                ).format(
+                    coupled="\n".join(coupled_test_names),
                     tests=" ".join(coupled_test_names),
+                    common_fixtures="\n".join(common_fixtures) if common_fixtures else ""
                 )
                 self.reporter.write(msg, red=True)
 
@@ -197,9 +225,9 @@ class Sherlock(object):
         :param List[_pytest.nodes.Item] items: list of item objects
         """
         if config.getoption("--flaky-test"):
-            test_collection = Collection(items)
-            self.bts_root.insert(test_collection.needed_tests(config.option.flaky_test))
-            items[:] = [test_collection.test_func]
+            self.collection = Collection(items)
+            self.collection.make(config.option.flaky_test)
+            items[:] = [self.collection.test_func]
         yield
 
     @pytest.hookimpl(trylast=True)
@@ -211,7 +239,7 @@ class Sherlock(object):
     def pytest_terminal_summary(self, terminalreporter):
         if self._coupled:
             self.summary_stats()
-        self.summary_coupled()
+            self.summary_coupled()
         yield
         terminalreporter.summary_failures()
         terminalreporter.summary_errors()
@@ -221,23 +249,19 @@ class Sherlock(object):
     @pytest.hookimpl(hookwrapper=True)
     def pytest_runtest_protocol(self, item, nextitem):
         steps = 1
-        root = self.bts_root.root
-        while root is not None:
+        is_target_test_success = True
+        current_tests = self.collection.get_current_tests()
+        while current_tests:
             self.write_step(steps)
-            # TODO need little bit refactor BTS, add sugar
-            current_tests = root.left.value if root.left is not None else root.value
             self.reset_progress(current_tests)
             self.call_items(target_item=item, items=current_tests)
             is_target_test_success = self.call_target(target_item=item)
-            if is_target_test_success:
-                root = root.right
-            else:
-                if len(current_tests) == 1:
-                    self._coupled = current_tests
-                    return False
-                root = root.left
+            self.collection.set_current_status(is_target_test_success)
+            if len(current_tests) == 1 and not is_target_test_success:
+                self._coupled = [current_tests[0], item]
             steps += 1
-        return True
+            current_tests = self.collection.get_current_tests()
+        return is_target_test_success
 
     def pytest_runtestloop(self, session):
         if session.testsfailed and not session.config.option.continue_on_collection_errors:

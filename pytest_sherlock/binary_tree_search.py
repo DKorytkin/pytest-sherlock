@@ -1,8 +1,8 @@
 
 
 class Node(object):
-    def __init__(self, value):
-        self.value = value
+    def __init__(self, items):
+        self.items = items
         self.left = None
         self.right = None
 
@@ -11,23 +11,23 @@ class Root(object):
     def __init__(self):
         self.root = None
 
-    def insert(self, value):
-        if self.root is not None or value is None:
+    def insert(self, items):
+        if self.root is not None or items is None:
             return self.root
-        self.root = Node(value)
-        return self._insert(value, self.root)
+        self.root = Node(items)
+        return self._insert(items, self.root)
 
-    def _insert(self, value, current_root):
-        mid = len(value) // 2
-        if not value or mid == 0:
+    def _insert(self, items, current_root):
+        mid = len(items) // 2
+        if not items or mid == 0:
             return
 
-        left = value[:mid]
+        left = items[:mid]
         if left:
             current_root.left = Node(left)
             self._insert(left, current_root.left)
 
-        right = value[mid:]
+        right = items[mid:]
         if right:
             current_root.right = Node(right)
             self._insert(right, current_root.right)

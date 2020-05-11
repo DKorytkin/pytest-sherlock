@@ -2,25 +2,9 @@ import contextlib
 import time
 
 import pytest
-from _pytest.main import (
-    EXIT_OK,
-    EXIT_TESTSFAILED,
-    EXIT_INTERRUPTED,
-    EXIT_USAGEERROR,
-    EXIT_NOTESTSCOLLECTED,
-)
 from _pytest.runner import runtestprotocol
 
 from pytest_sherlock.binary_tree_search import Root as BTSRoot
-
-
-PYTEST_EXIT_CODES = (
-    EXIT_OK,
-    EXIT_TESTSFAILED,
-    EXIT_INTERRUPTED,
-    EXIT_USAGEERROR,
-    EXIT_NOTESTSCOLLECTED,
-)
 
 
 def build_summary_stats_line(stats):

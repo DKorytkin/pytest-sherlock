@@ -3,7 +3,6 @@ import pytest
 from _pytest.config import Config
 from _pytest.nodes import Item
 
-from pytest_sherlock.binary_tree_search import Root, Node
 from pytest_sherlock.sherlock import Collection, Sherlock
 
 
@@ -26,12 +25,12 @@ def make_fake_test_item(name, *fixtures):
     return pytest_func
 
 
-@pytest.fixture(scope="class")
+@pytest.fixture(scope="function")
 def target_item():
     return make_fake_test_item("five")
 
 
-@pytest.fixture(scope="class")
+@pytest.fixture(scope="function")
 def items(target_item):
     pytest_items = [make_fake_test_item(item) for item in ["one", "two", "tree", "four", "six"]]
     pytest_items.insert(4, target_item)  # between four and six
@@ -47,11 +46,19 @@ def items(target_item):
     return pytest_items
 
 
-class TestCollection(object):
+@pytest.fixture(scope="function")
+def collection(items):
+    return Collection(items)
 
-    @pytest.fixture()
-    def collection(self, items):
-        return Collection(items)
+
+@pytest.fixture(scope="function")
+def sherlock_with_prepared_collection(sherlock, collection, target_item):
+    sherlock.collection = collection
+    sherlock.collection.prepare(target_item.nodeid)
+    return sherlock
+
+
+class TestCollection(object):
 
     def test_create_instance(self, items):
         tc = Collection(items)
@@ -127,9 +134,10 @@ class TestSherlock(object):
     @pytest.mark.parametrize("line", ("123", 12), ids=["string", "integer"])
     def test_write_step_to_terminal(self, sherlock, line):
         sherlock._tw = mock.MagicMock()
-        sherlock.write_step(line)
+        sherlock.write_step(line, 666)
         sherlock.reporter.ensure_newline.assert_called_once()
-        sherlock._tw.write.assert_called_once_with("Step #{}:".format(line), yellow=True, bold=True)
+        exp_msg = "Step: [{} of 666]:".format(line)
+        sherlock._tw.write.assert_called_once_with(exp_msg, yellow=True, bold=True)
 
     def test_log(self, sherlock, target_item):
         with mock.patch(
@@ -173,8 +181,37 @@ class TestSherlock(object):
         assert items == items
         config.getoption.assert_called_once()
 
-    def test_pytest_report_collectionfinish(self, sherlock, items):
-        report = sherlock.pytest_report_collectionfinish(
+    def test_pytest_report_collectionfinish(self, sherlock_with_prepared_collection):
+        """
+        Collection:
+        [
+            'tests/test_one.py::test_one',
+            'tests/test_two.py::test_two',
+            'tests/test_tree.py::test_tree',
+            'tests/test_four.py::test_four',
+            'tests/test_five.py::test_five',
+            'tests/test_six.py::test_six',
+        ]
+        Target item: 'tests/test_five.py::test_five'
+        Prepared collection (filtered by target item):
+        ____________________________________________
+        || index | test                           ||
+        --------------------------------------------
+        | 0      | 'tests/test_one.py::test_one'   |
+        | 1      | 'tests/test_two.py::test_two'   |
+        | 2      | 'tests/test_tree.py::test_tree' |
+        | 3      | 'tests/test_four.py::test_four' |
+        --------------------------------------------
+
+        Binary tree search:
+                        First step
+                        /        \
+                    [0, 1]       [2, 3]
+             Second step            Second step
+            /           \          /          \
+         [0]            [1]     [2]           [3]
+        """
+        report = sherlock_with_prepared_collection.pytest_report_collectionfinish(
             config=mock.MagicMock(), startdir=mock.MagicMock(), items=items
         )
-        assert report == "Try to find coupled tests"
+        assert report == "Try to find coupled tests in [2-3] steps"

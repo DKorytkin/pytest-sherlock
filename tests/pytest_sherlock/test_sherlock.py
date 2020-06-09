@@ -133,11 +133,15 @@ class TestSherlock(object):
 
     @pytest.mark.parametrize("line", ("123", 12), ids=["string", "integer"])
     def test_write_step_to_terminal(self, sherlock, line):
-        sherlock._tw = mock.MagicMock()
+        """
+        test expected message like:
+        ________ Step [123 of 666] ________
+        """
+        sherlock._tw = mock.MagicMock()  # just for mock terminal
         sherlock.write_step(line, 666)
         sherlock.reporter.ensure_newline.assert_called_once()
-        exp_msg = "Step: [{} of 666]:".format(line)
-        sherlock._tw.write.assert_called_once_with(exp_msg, yellow=True, bold=True)
+        exp_msg = "Step [{} of 666]:".format(line)
+        sherlock.terminal.sep.assert_called_once_with("_", exp_msg, yellow=True, bold=True)
 
     def test_log(self, sherlock, target_item):
         with mock.patch(

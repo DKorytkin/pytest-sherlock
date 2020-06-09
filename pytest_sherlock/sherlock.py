@@ -188,9 +188,8 @@ class Sherlock(object):
 
     def write_step(self, step, maximum):
         self.reporter.ensure_newline()
-        # self.terminal.sep(sep, title, **markup)
-        # TODO need add process like: Step: [1 of 12]
-        self.terminal.write("Step: [{} of {}]:".format(step, maximum), yellow=True, bold=True)
+        message = "Step [{} of {}]:".format(step, maximum)
+        self.terminal.sep('_', message, yellow=True, bold=True)
 
     @contextlib.contextmanager
     def log(self, item):
@@ -214,7 +213,7 @@ class Sherlock(object):
         coupled_test_names = [t.nodeid.replace("::()::", "::") for t in self._coupled]
         common_fixtures = set.intersection(*[set(t.fixturenames) for t in self._coupled])
         msg = (
-            "found coupled tests:\n"
+            "Found coupled tests:\n"
             "{coupled}\n\n"
             "Common fixtures:\n"
             "{common_fixtures}\n\n"
@@ -230,18 +229,17 @@ class Sherlock(object):
         # TODO port class TerminalReporter and modify
         if self.config.option.tbstyle != "no":
             reports = self.reporter.getreports("coupled")
-            if not reports:
+            if not reports or not self._coupled:
                 return
             last_report = reports[-1]
-            if self._coupled:
-                self.write_coupled_report()
-
+            self.write_coupled_report()
             msg = self.reporter._getfailureheadline(last_report)
             self.reporter.write_sep("_", msg, red=True, bold=True)
             self.reporter._outrep_summary(last_report)
 
     def summary_stats(self):
         session_duration = time.time() - self.reporter._sessionstarttime
+        # TODO need to fix message "found 5 coupled tests"
         line, color = build_summary_stats_line(self.reporter.stats)
         msg = "%s in %.2f seconds" % (line, session_duration)
         markup = {color: True, 'bold': True}
@@ -256,6 +254,34 @@ class Sherlock(object):
         """
         called after collection has been performed, may filter or re-order
         the items in-place.
+
+        Items:
+        [
+            'tests/test_one.py::test_one',
+            'tests/test_two.py::test_two',
+            'tests/test_tree.py::test_tree',
+            'tests/test_four.py::test_four',
+            'tests/test_five.py::test_five',
+            'tests/test_six.py::test_six',
+        ]
+        Target item: 'tests/test_five.py::test_five'
+        Prepared collection (filtered by target item):
+        ____________________________________________
+        || index | test                           ||
+        --------------------------------------------
+        | 0      | 'tests/test_one.py::test_one'   |
+        | 1      | 'tests/test_two.py::test_two'   |
+        | 2      | 'tests/test_tree.py::test_tree' |
+        | 3      | 'tests/test_four.py::test_four' |
+        --------------------------------------------
+
+        Binary tree search:
+                        First step
+                        /        \
+                    [0, 1]       [2, 3]
+             Second step            Second step
+            /           \          /          \
+         [0]            [1]     [2]           [3]
 
         :param _pytest.config.Config config: pytest config object
         :param List[_pytest.nodes.Item] items: list of item objects
@@ -277,19 +303,13 @@ class Sherlock(object):
             self.summary_stats()
             self.summary_coupled()
         yield
-        terminalreporter.summary_failures()
-        terminalreporter.summary_errors()
-        terminalreporter.summary_warnings()
-        terminalreporter.summary_passes()
 
     @pytest.hookimpl(hookwrapper=True)
     def pytest_runtest_protocol(self, item, nextitem):
-        max_length = len(self.collection) + 1
+        max_length = len(self.collection) + 1  # target test
         for step, bucket in enumerate(self.collection, start=1):
             self.write_step(step, max_length)
-            self.reset_progress(bucket)
-            self.call_items(target_item=item, items=bucket)
-            bucket.is_success = self.call_target(target_item=item)
+            self.call(target_item=item, items=bucket)
             if len(bucket) == 1 and not bucket.is_success:
                 self._coupled = [bucket[0], item]
                 break
@@ -334,3 +354,12 @@ class Sherlock(object):
                 logger(report=report)
                 success.append(True)
         return all(success)  # setup, call, teardown must success
+
+    def call(self, target_item, items):
+        """
+        :param target_item: current flaky test
+        :param Bucket items: bucket of tests which probably guilty in failure
+        """
+        self.reset_progress(items)
+        self.call_items(target_item=target_item, items=items)
+        items.is_success = self.call_target(target_item=target_item)

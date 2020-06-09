@@ -33,46 +33,50 @@ pytest tests/exmaple/test_c_delete.py tests/exmaple/test_b_modify.py tests/exmap
 ```
 Plugin didn't run all tests, it try to find some possible guilty test and will run first
 ```bash
-======================= test session starts =======================
-collected 10 items                                                                                                                                                                                  
-Try to find coupled tests
-Step #1:
-tests/exmaple/test_b_modify.py::test_modify_random_param PASSED                                                                                                                               [ 20%]
-tests/exmaple/test_c_delete.py::test_delete_random_param PASSED                                                                                                                               [ 40%]
-tests/exmaple/test_c_delete.py::test_deleted_passed PASSED                                                                                                                                    [ 60%]
-tests/exmaple/test_c_delete.py::test_do_not_delete PASSED                                                                                                                                     [ 80%]
-tests/exmaple/test_all_read.py::test_read_params COUPLED                                                                                                                                      [100%]
-Step #2:
-tests/exmaple/test_b_modify.py::test_modify_random_param PASSED                                                                                                                               [ 33%]
-tests/exmaple/test_c_delete.py::test_delete_random_param PASSED                                                                                                                               [ 66%]
-tests/exmaple/test_all_read.py::test_read_params COUPLED                                                                                                                                      [100%]
-Step #3:
-tests/exmaple/test_b_modify.py::test_modify_random_param PASSED                                                                                                                               [ 50%]
-tests/exmaple/test_all_read.py::test_read_params COUPLED                                                                                                                                      [100%]
+Try to find coupled tests in [3-4] steps
+__________________________ Step [1 of 4]: __________________________
 
-======================== found coupled in 0.08 seconds ========================
-found coupled tests:
+tests/exmaple/test_c_delete.py::test_delete_random_param PASSED                                                                                                      [ 20%]
+tests/exmaple/test_b_modify.py::test_modify_random_param PASSED                                                                                                      [ 40%]
+tests/exmaple/test_c_delete.py::test_deleted_passed PASSED                                                                                                           [ 60%]
+tests/exmaple/test_c_delete.py::test_do_not_delete PASSED                                                                                                            [ 80%]
+tests/exmaple/test_all_read.py::test_read_params COUPLED                                                                                                             [100%]
+__________________________ Step [2 of 4]: __________________________
+
+tests/exmaple/test_c_delete.py::test_delete_random_param PASSED                                                                                                      [ 33%]
+tests/exmaple/test_b_modify.py::test_modify_random_param PASSED                                                                                                      [ 66%]
+tests/exmaple/test_all_read.py::test_read_params COUPLED                                                                                                             [100%]
+__________________________ Step [3 of 4]: __________________________
+
+tests/exmaple/test_c_delete.py::test_delete_random_param PASSED                                                                                                      [ 50%]
+tests/exmaple/test_all_read.py::test_read_params PASSED                                                                                                              [100%]
+__________________________ Step [4 of 4]: __________________________
+
+tests/exmaple/test_b_modify.py::test_modify_random_param PASSED                                                                                                      [ 50%]
+tests/exmaple/test_all_read.py::test_read_params COUPLED                                                                                                             [100%]
+
+=================== found coupled in 0.08 seconds ===================
+Found coupled tests:
 tests/exmaple/test_b_modify.py::test_modify_random_param
 tests/exmaple/test_all_read.py::test_read_params
 
 Common fixtures:
 config
-param
 
 How to reproduce:
 pytest -l -vv tests/exmaple/test_b_modify.py::test_modify_random_param tests/exmaple/test_all_read.py::test_read_params
-_____________________________ test_read_params __________________________________
+__________________________ test_read_params __________________________
 
 config = {'a': 1, 'b': 13, 'c': 3}, param = 'b'
 
     def test_read_params(config, param):
 >       assert config.get(param) == 2
 E       AssertionError: assert 13 == 2
-E        +  where 13 = <built-in method get of dict object at 0x107c464b0>('b')
-E        +    where <built-in method get of dict object at 0x107c464b0> = {'a': 1, 'b': 13, 'c': 3}.get
+E        +  where 13 = <built-in method get of dict object at 0x10ef1ed70>('b')
+E        +    where <built-in method get of dict object at 0x10ef1ed70> = {'a': 1, 'b': 13, 'c': 3}.get
 
 tests/exmaple/test_all_read.py:8: AssertionError
-======================= 7 passed, 3 coupled in 0.08 seconds ======================= 
+=================== 9 passed, 3 coupled in 0.08 seconds ===================
 ```
 
 ### TODO

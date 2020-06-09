@@ -1,3 +1,4 @@
+import random
 
 
 def test_modified_passed():
@@ -14,6 +15,5 @@ def test_do_not_modified():
 
 
 def test_flaky():
-    import random
     assert random.choice([True, False])
 

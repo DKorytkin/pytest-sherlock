@@ -251,7 +251,7 @@ class Sherlock(object):
 
     @pytest.hookimpl(hookwrapper=True)
     def pytest_collection_modifyitems(self, session, config, items):
-        """
+        r"""
         called after collection has been performed, may filter or re-order
         the items in-place.
 
@@ -276,12 +276,13 @@ class Sherlock(object):
         --------------------------------------------
 
         Binary tree search:
-                        First step
-                        /        \
-                    [0, 1]       [2, 3]
-             Second step            Second step
-            /           \          /          \
-         [0]            [1]     [2]           [3]
+        # First step
+                            root
+                           /    \
+                     [0, 1]      [2, 3]
+        # Second step
+                    /   \        /    \
+                 [0]    [1]    [2]    [3]
 
         :param _pytest.config.Config config: pytest config object
         :param List[_pytest.nodes.Item] items: list of item objects

@@ -224,6 +224,7 @@ class Sherlock(object):
             common_fixtures="\n".join(common_fixtures) if common_fixtures else ""
         )
         self.reporter.write(msg, red=True)
+        return msg
 
     def summary_coupled(self):
         # TODO port class TerminalReporter and modify
@@ -301,7 +302,7 @@ class Sherlock(object):
         length = len(self.collection)
         return "Try to find coupled tests in [{}-{}] steps".format(length, length + 1)
 
-    @pytest.hookimpl(hookwrapper=True)
+    @pytest.hookimpl(hookwrapper=True, tryfirst=True)
     def pytest_terminal_summary(self, terminalreporter):
         if self._coupled:
             self.summary_stats()

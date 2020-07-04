@@ -193,9 +193,9 @@ class Sherlock(object):
 
     @contextlib.contextmanager
     def log(self, item):
-        self.reporter.pytest_runtest_logstart(nodeid=item.nodeid, location=item.location)
-        yield self.reporter.pytest_runtest_logreport
-        self.reporter.pytest_runtest_logfinish(nodeid=item.nodeid)
+        item.ihook.pytest_runtest_logstart(nodeid=item.nodeid, location=item.location)
+        yield item.ihook.pytest_runtest_logreport
+        item.ihook.pytest_runtest_logfinish(nodeid=item.nodeid, location=item.location)
 
     @staticmethod
     def refresh_state(item):
@@ -228,10 +228,13 @@ class Sherlock(object):
     def summary_coupled(self):
         # TODO port class TerminalReporter and modify
         if self.config.option.tbstyle != "no":
-            reports = self.reporter.getreports("coupled")
+            # TODO need to rewrite
+            # reports = self.reporter.getreports("coupled")
+            reports = self.reporter.getreports("failed")
             if not reports or not self._coupled:
                 return
             last_report = reports[-1]
+            self.reporter.stats["failed"] = [last_report]
             self.write_coupled_report()
             msg = self.reporter._getfailureheadline(last_report)
             self.reporter.write_sep("_", msg, red=True, bold=True)
@@ -347,7 +350,8 @@ class Sherlock(object):
             reports = runtestprotocol(target_item, log=False)
             for report in reports:  # 3 reports: setup, call, teardown
                 if report.failed is True:
-                    report.outcome = 'coupled'
+                    # TODO need to rewrite
+                    # report.outcome = 'coupled'
                     self.refresh_state(item=target_item)
                     logger(report=report)
                     success.append(False)

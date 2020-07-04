@@ -143,7 +143,7 @@ class TestSherlock(object):
         exp_msg = "Step [{} of 666]:".format(line)
         sherlock.terminal.sep.assert_called_once_with("_", exp_msg, yellow=True, bold=True)
 
-    @pytest.skip("need to fix")
+    @pytest.mark.skip("need to fix")
     def test_log(self, sherlock, target_item):
         with mock.patch(
                 "pytest_sherlock.sherlock.Sherlock.reporter",

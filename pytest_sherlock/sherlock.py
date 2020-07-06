@@ -1,8 +1,8 @@
 import contextlib
-import time
 
 import pytest
 from _pytest.runner import runtestprotocol
+from _pytest.junitxml import _NodeReporter
 
 from pytest_sherlock.binary_tree_search import Root as BTSRoot
 
@@ -73,7 +73,7 @@ class Bucket(object):
     def __init__(self, items):
         self.items = items
         self.__current = 0
-        self.is_success = False
+        self.failed_report = None
 
     def __len__(self):
         return len(self.items)
@@ -139,7 +139,7 @@ class Collection(object):
 
     def next(self):
         if self.__last is not None:
-            self._set_current_status(self.__last.is_success)
+            self._set_current_status(not bool(self.__last.failed_report))
             self.__last = self._get_current_tests()
             return self.__last
 
@@ -223,35 +223,7 @@ class Sherlock(object):
             tests=" ".join(coupled_test_names),
             common_fixtures="\n".join(common_fixtures) if common_fixtures else ""
         )
-        self.reporter.write(msg, red=True)
         return msg
-
-    def summary_coupled(self):
-        # TODO port class TerminalReporter and modify
-        if self.config.option.tbstyle != "no":
-            # TODO need to rewrite
-            # reports = self.reporter.getreports("coupled")
-            reports = self.reporter.getreports("failed")
-            if not reports or not self._coupled:
-                return
-            last_report = reports[-1]
-            self.reporter.stats["failed"] = [last_report]
-            self.write_coupled_report()
-            msg = self.reporter._getfailureheadline(last_report)
-            self.reporter.write_sep("_", msg, red=True, bold=True)
-            self.reporter._outrep_summary(last_report)
-
-    def summary_stats(self):
-        session_duration = time.time() - self.reporter._sessionstarttime
-        # TODO need to fix message "found 5 coupled tests"
-        line, color = build_summary_stats_line(self.reporter.stats)
-        msg = "%s in %.2f seconds" % (line, session_duration)
-        markup = {color: True, 'bold': True}
-
-        if self.reporter.verbosity >= 0:
-            self.reporter.write_sep("=", msg, **markup)
-        if self.reporter.verbosity == -1:
-            self.reporter.write_line(msg, **markup)
 
     @pytest.hookimpl(hookwrapper=True)
     def pytest_collection_modifyitems(self, session, config, items):
@@ -302,12 +274,21 @@ class Sherlock(object):
         length = len(self.collection)
         return "Try to find coupled tests in [{}-{}] steps".format(length, length + 1)
 
-    @pytest.hookimpl(hookwrapper=True, tryfirst=True)
-    def pytest_terminal_summary(self, terminalreporter):
-        if self._coupled:
-            self.summary_stats()
-            self.summary_coupled()
-        yield
+    def patch_report(self, item, failed_report):
+        node_reporter = _NodeReporter(item.nodeid, self.config._xml)
+        if hasattr(failed_report.longrepr, "reprcrash"):
+            message = failed_report.longrepr.reprcrash.message
+        elif isinstance(failed_report.longrepr, (unicode, str)):
+            message = failed_report.longrepr
+        else:
+            message = str(failed_report.longrepr)
+        failed_report.longrepr = "\n{}\n\n{}".format(message, self.write_coupled_report())
+        node_reporter.append_failure(failed_report)
+        self.config._xml.node_reporters_ordered[:] = [node_reporter]
+        self.config._xml.stats["failure"] = 1
+        reports = self.reporter.getreports("failed")
+        last_report = reports[-1]
+        self.reporter.stats["failed"] = [last_report]
 
     @pytest.hookimpl(hookwrapper=True)
     def pytest_runtest_protocol(self, item, nextitem):
@@ -315,8 +296,9 @@ class Sherlock(object):
         for step, bucket in enumerate(self.collection, start=1):
             self.write_step(step, max_length)
             self.call(target_item=item, items=bucket)
-            if len(bucket) == 1 and not bucket.is_success:
+            if len(bucket) == 1 and bucket.failed_report:
                 self._coupled = [bucket[0], item]
+                self.patch_report(item, bucket.failed_report)
                 break
 
     def pytest_runtestloop(self, session):
@@ -346,7 +328,7 @@ class Sherlock(object):
                     logger(report=report)
 
     def call_target(self, target_item):
-        success = []
+        failed_report = None
         with self.log(target_item) as logger:
             reports = runtestprotocol(target_item, log=False)
             for report in reports:  # 3 reports: setup, call, teardown
@@ -355,11 +337,10 @@ class Sherlock(object):
                     # report.outcome = 'coupled'
                     self.refresh_state(item=target_item)
                     logger(report=report)
-                    success.append(False)
+                    failed_report = report
                     continue
                 logger(report=report)
-                success.append(True)
-        return all(success)  # setup, call, teardown must success
+        return failed_report  # setup, call, teardown must success
 
     def call(self, target_item, items):
         """
@@ -368,4 +349,4 @@ class Sherlock(object):
         """
         self.reset_progress(items)
         self.call_items(target_item=target_item, items=items)
-        items.is_success = self.call_target(target_item=target_item)
+        items.failed_report = self.call_target(target_item=target_item)

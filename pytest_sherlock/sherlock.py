@@ -57,6 +57,20 @@ def refresh_state(item):
     return True
 
 
+def write_coupled_report(coupled_tests):
+    """
+    :param list[_pytest.python.Function] coupled_tests: list of coupled tests
+    """
+    # TODO can I get info about modified common fixtures?
+    coupled_test_names = [t.nodeid.replace("::()::", "::") for t in coupled_tests]
+    common_fixtures = set.intersection(*[set(t.fixturenames) for t in coupled_tests])
+    msg = "Found coupled tests:\n{}\n\n".format("\n".join(coupled_test_names))
+    if common_fixtures:
+        msg += "Common fixtures:\n{}\n\n".format("\n".join(common_fixtures))
+    msg += "How to reproduce:\npytest -l -vv {}\n".format(" ".join(coupled_test_names))
+    return msg
+
+
 class Bucket(object):
     def __init__(self, items):
         self.items = items
@@ -174,6 +188,15 @@ class Sherlock(object):
         return self._tw
 
     def write_step(self, step, maximum):
+        """
+        Write summary of steps
+        For Example:
+        _______________________________ Step [1 of 4]: _______________________________
+        ...
+
+        :param str|int step:
+        :param str|int maximum:
+        """
         self.reporter.ensure_newline()
         message = "Step [{} of {}]:".format(step, maximum)
         self.terminal.sep('_', message, yellow=True, bold=True)
@@ -185,18 +208,26 @@ class Sherlock(object):
         item.ihook.pytest_runtest_logfinish(nodeid=item.nodeid, location=item.location)
 
     def reset_progress(self, collection):
+        """
+        Patch progress for each step
+        100% should be all tests from collection + target test
+        For example:
+        _______________________________ Step [1 of 4]: _______________________________
+        tests/exmaple/test_c_delete.py::test_delete_random_param PASSED         [ 20%]
+        tests/exmaple/test_b_modify.py::test_modify_random_param PASSED         [ 40%]
+        tests/exmaple/test_c_delete.py::test_deleted_passed PASSED              [ 60%]
+        tests/exmaple/test_c_delete.py::test_do_not_delete PASSED               [ 80%]
+        tests/exmaple/test_all_read.py::test_read_params FAILED                 [100%]
+        _______________________________ Step [2 of 4]: _______________________________
+        tests/exmaple/test_c_delete.py::test_delete_random_param PASSED         [ 33%]
+        tests/exmaple/test_b_modify.py::test_modify_random_param PASSED         [ 66%]
+        tests/exmaple/test_all_read.py::test_read_params FAILED                 [100%]
+        ...
+
+        :param Bucket[_pytest.python.Function] collection: bucket of tests
+        """
         self.reporter._progress_nodeids_reported = set()
         self.reporter._session.testscollected = len(collection) + 1  # current item
-
-    def write_coupled_report(self):
-        # TODO can I get info about modified common fixtures?
-        coupled_test_names = [t.nodeid.replace("::()::", "::") for t in self._coupled]
-        common_fixtures = set.intersection(*[set(t.fixturenames) for t in self._coupled])
-        msg = "Found coupled tests:\n{}\n\n".format("\n".join(coupled_test_names))
-        if common_fixtures:
-            msg += "Common fixtures:\n{}\n\n".format("\n".join(common_fixtures))
-        msg += "How to reproduce:\npytest -l -vv {}\n".format(" ".join(coupled_test_names))
-        return msg
 
     @pytest.hookimpl(hookwrapper=True)
     def pytest_collection_modifyitems(self, session, config, items):
@@ -233,8 +264,9 @@ class Sherlock(object):
                     /   \        /    \
                  [0]    [1]    [2]    [3]
 
+        :param _pytest.main.Session session:
         :param _pytest.config.Config config: pytest config object
-        :param List[_pytest.nodes.Item] items: list of item objects
+        :param List[_pytest.python.Function] items: list of item objects
         """
         if config.getoption("--flaky-test"):
             self.collection = Collection(items)
@@ -244,18 +276,31 @@ class Sherlock(object):
 
     @pytest.hookimpl(trylast=True)
     def pytest_report_collectionfinish(self, config, startdir, items):
+        """
+        Write summary which minimum steps need to find guilty tests
+        :param _pytest.config.Config config: pytest config object
+        :param py._path.local.LocalPath startdir:
+        :param List[_pytest.python.Function] items: contain just target test
+        """
         length = len(self.collection)
         return "Try to find coupled tests in [{}-{}] steps".format(length, length + 1)
 
-    def patch_report(self, item, failed_report):
+    def patch_report(self, failed_report, coupled):
+        """
+        Patch reports console output and Junit result xml
+        to avoid multi errors in report
+        :param _pytest.runner.TestReport failed_report:
+        :param list[_pytest.python.Function] coupled: list of coupled tests, last should be target
+        """
+        target_item = coupled[-1]
         if hasattr(failed_report.longrepr, "reprcrash"):
             message = failed_report.longrepr.reprcrash.message
         elif isinstance(failed_report.longrepr, six.string_types):
             message = failed_report.longrepr
         else:
             message = str(failed_report.longrepr)
-        failed_report.longrepr = "\n{}\n\n{}".format(self.write_coupled_report(), message)
-        node_reporter = _NodeReporter(item.nodeid, self.config._xml)
+        failed_report.longrepr = "\n{}\n\n{}".format(write_coupled_report(coupled), message)
+        node_reporter = _NodeReporter(target_item.nodeid, self.config._xml)
         node_reporter.append_failure(failed_report)
         node_reporter.finalize()
         self.config._xml.node_reporters_ordered[:] = [node_reporter]
@@ -266,16 +311,23 @@ class Sherlock(object):
 
     @pytest.hookimpl(hookwrapper=True)
     def pytest_runtest_protocol(self, item, nextitem):
+        """
+        :param _pytest.python.Function item:
+        :param _pytest.python.Function | None nextitem:
+        """
         max_length = len(self.collection) + 1  # target test
         for step, bucket in enumerate(self.collection, start=1):
             self.write_step(step, max_length)
             self.call(target_item=item, items=bucket)
             if len(bucket) == 1 and bucket.failed_report:
-                self._coupled = [bucket[0], item]
-                self.patch_report(item, bucket.failed_report)
+                self.patch_report(bucket.failed_report, coupled=[bucket[0], item])
                 break
 
     def pytest_runtestloop(self, session):
+        """
+        Just fork origin pytest method and reuse own `pytest_runtest_protocol` inside
+        :param _pytest.main.Session session:
+        """
         if session.testsfailed and not session.config.option.continue_on_collection_errors:
             raise session.Interrupted("%d errors during collection" % session.testsfailed)
 
@@ -292,6 +344,12 @@ class Sherlock(object):
         return True
 
     def call_items(self, target_item, items):
+        """
+        Call all items before target test
+        and if one of result (setup, call, teardown) failed mark as flaky
+        :param _pytest.python.Function target_item: test which should fail
+        :param Bucket[_pytest.python.Function] items: bucket of tests
+        """
         for next_idx, test_func in enumerate(items, 1):
             with self.log(test_func) as logger:
                 next_item = items[next_idx] if next_idx < len(items) else target_item
@@ -302,6 +360,11 @@ class Sherlock(object):
                     logger(report=report)
 
     def call_target(self, target_item):
+        """
+        Call target test after some tests which were run before
+        and if one of result (setup, call, teardown) failed mark as coupled
+        :param _pytest.python.Function target_item: current flaky test
+        """
         failed_report = None
         with self.log(target_item) as logger:
             reports = runtestprotocol(target_item, log=False)
@@ -316,8 +379,9 @@ class Sherlock(object):
 
     def call(self, target_item, items):
         """
-        :param target_item: current flaky test
-        :param Bucket items: bucket of tests which probably guilty in failure
+        Call all tests (which probably guilty in failure) before target test
+        :param _pytest.python.Function target_item: current flaky test
+        :param Bucket[_pytest.python.Function] items: bucket of tests
         """
         self.reset_progress(items)
         self.call_items(target_item=target_item, items=items)

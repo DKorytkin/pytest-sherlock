@@ -1,6 +1,7 @@
 import contextlib
 
 import pytest
+import six
 from _pytest.runner import runtestprotocol
 from _pytest.junitxml import _NodeReporter
 
@@ -275,15 +276,16 @@ class Sherlock(object):
         return "Try to find coupled tests in [{}-{}] steps".format(length, length + 1)
 
     def patch_report(self, item, failed_report):
-        node_reporter = _NodeReporter(item.nodeid, self.config._xml)
         if hasattr(failed_report.longrepr, "reprcrash"):
             message = failed_report.longrepr.reprcrash.message
-        elif isinstance(failed_report.longrepr, (unicode, str)):
+        elif isinstance(failed_report.longrepr, six.string_types):
             message = failed_report.longrepr
         else:
             message = str(failed_report.longrepr)
-        failed_report.longrepr = "\n{}\n\n{}".format(message, self.write_coupled_report())
+        failed_report.longrepr = "\n{}\n\n{}".format(self.write_coupled_report(), message)
+        node_reporter = _NodeReporter(item.nodeid, self.config._xml)
         node_reporter.append_failure(failed_report)
+        node_reporter.finalize()
         self.config._xml.node_reporters_ordered[:] = [node_reporter]
         self.config._xml.stats["failure"] = 1
         reports = self.reporter.getreports("failed")

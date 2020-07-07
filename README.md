@@ -40,12 +40,12 @@ tests/exmaple/test_c_delete.py::test_delete_random_param PASSED                 
 tests/exmaple/test_b_modify.py::test_modify_random_param PASSED                                                                                                      [ 40%]
 tests/exmaple/test_c_delete.py::test_deleted_passed PASSED                                                                                                           [ 60%]
 tests/exmaple/test_c_delete.py::test_do_not_delete PASSED                                                                                                            [ 80%]
-tests/exmaple/test_all_read.py::test_read_params COUPLED                                                                                                             [100%]
+tests/exmaple/test_all_read.py::test_read_params FAILED                                                                                                             [100%]
 __________________________ Step [2 of 4]: __________________________
 
 tests/exmaple/test_c_delete.py::test_delete_random_param PASSED                                                                                                      [ 33%]
 tests/exmaple/test_b_modify.py::test_modify_random_param PASSED                                                                                                      [ 66%]
-tests/exmaple/test_all_read.py::test_read_params COUPLED                                                                                                             [100%]
+tests/exmaple/test_all_read.py::test_read_params FAILED                                                                                                             [100%]
 __________________________ Step [3 of 4]: __________________________
 
 tests/exmaple/test_c_delete.py::test_delete_random_param PASSED                                                                                                      [ 50%]
@@ -53,9 +53,11 @@ tests/exmaple/test_all_read.py::test_read_params PASSED                         
 __________________________ Step [4 of 4]: __________________________
 
 tests/exmaple/test_b_modify.py::test_modify_random_param PASSED                                                                                                      [ 50%]
-tests/exmaple/test_all_read.py::test_read_params COUPLED                                                                                                             [100%]
+tests/exmaple/test_all_read.py::test_read_params FAILED                                                                                                             [100%]
 
-=================== found coupled in 0.08 seconds ===================
+============================== FAILURES ==============================
+__________________________ test_read_params __________________________
+
 Found coupled tests:
 tests/exmaple/test_b_modify.py::test_modify_random_param
 tests/exmaple/test_all_read.py::test_read_params
@@ -65,21 +67,16 @@ config
 
 How to reproduce:
 pytest -l -vv tests/exmaple/test_b_modify.py::test_modify_random_param tests/exmaple/test_all_read.py::test_read_params
-__________________________ test_read_params __________________________
 
-config = {'a': 1, 'b': 13, 'c': 3}, param = 'b'
 
-    def test_read_params(config, param):
->       assert config.get(param) == 2
-E       AssertionError: assert 13 == 2
-E        +  where 13 = <built-in method get of dict object at 0x10ef1ed70>('b')
-E        +    where <built-in method get of dict object at 0x10ef1ed70> = {'a': 1, 'b': 13, 'c': 3}.get
+AssertionError: assert 13 == 2
+ +  where 13 = <built-in method get of dict object at 0x102664280>('b')
+ +    where <built-in method get of dict object at 0x102664280> = {'a': 1, 'b': 13, 'c': 3}.get
 
 tests/exmaple/test_all_read.py:8: AssertionError
-=================== 9 passed, 3 coupled in 0.08 seconds ===================
+=================== 1 failed, 9 passed in 0.08 seconds ===================
 ```
 
 ### TODO
 I have a couple ideas, how to improve finder coupled tests:
 - use **AST** for detect common peace of code *(variables, functions, etc...)*
-- **Also need to add tests for it =)**

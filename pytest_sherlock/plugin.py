@@ -23,7 +23,5 @@ def pytest_configure(config):
 
 
 def pytest_report_teststatus(report):
-    if report.outcome == 'coupled':
-        return 'coupled', 'C', ('COUPLED', {'red': True})
-    elif report.outcome == 'flaky':
+    if report.outcome == 'flaky':
         return 'flaky', 'F', ('FLAKY', {'yellow': True})

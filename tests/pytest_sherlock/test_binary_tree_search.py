@@ -72,3 +72,13 @@ def test_root_insert_not_even_data(root):
 def test_root_insert_without_data(root):
     root.insert(None)
     assert root.root is None
+
+
+def test_root_length(root):
+    root.insert(range(4))
+    assert len(root) == 2
+
+
+def test_not_even_root_length(root):
+    root.insert(range(5))
+    assert len(root) == 3

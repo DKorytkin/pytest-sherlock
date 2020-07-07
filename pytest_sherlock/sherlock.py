@@ -8,39 +8,19 @@ from _pytest.junitxml import _NodeReporter
 from pytest_sherlock.binary_tree_search import Root as BTSRoot
 
 
-def build_summary_stats_line(stats):
-    keys = [
-        "failed", "passed", "skipped", "deselected", "xfailed", "xpassed", "warnings", "error",
-        "coupled", "flaky",
-    ]
+class SherlockNotFoundError(Exception):
+    def __init__(self, test_name):
+        self.test_name = test_name
+        super(SherlockNotFoundError, self).__init__()
 
-    unknown_key_seen = False
-    for key in stats.keys():
-        if key not in keys:
-            if key:  # setup/teardown reports have an empty key, ignore them
-                keys.append(key)
-                unknown_key_seen = True
-    parts = []
-    for key in keys:
-        val = stats.get(key, None)
-        if val:
-            parts.append("%d %s" % (len(val), key))
+    def message(self):
+        return (
+            "Test not found: {}. "
+            "Please validate your test name (ex: 'tests/unit/test_one.py::test_first')"
+        ).format(self.test_name)
 
-    if parts:
-        line = "found coupled"
-    else:
-        line = "no tests ran"
-
-    if "coupled" in keys or "failed" in stats or "error" in stats:
-        color = 'red'
-    elif ("warnings" in stats or "flaky" in keys) or unknown_key_seen:
-        color = "yellow"
-    elif "passed" in stats:
-        color = "green"
-    else:
-        color = "yellow"
-
-    return line, color
+    def __str__(self):
+        return self.message()
 
 
 def _remove_cached_results_from_failed_fixtures(item):
@@ -67,6 +47,13 @@ def _remove_failed_setup_state_from_session(item):
         if hasattr(col, prepare_exc):
             delattr(col, prepare_exc)
     setup_state.stack = list()
+    return True
+
+
+def refresh_state(item):
+    # TODO need investigate
+    _remove_cached_results_from_failed_fixtures(item)
+    _remove_failed_setup_state_from_session(item)
     return True
 
 
@@ -119,8 +106,7 @@ class Collection(object):
             tests.append(test_func)
 
         if self.test_func is None:
-            # TODO make own error
-            raise RuntimeError("Validate your test name (ex: 'tests/unit/test_one.py::test_first')")
+            raise SherlockNotFoundError(test_name)
 
         tests[:] = sorted(
             tests,
@@ -198,13 +184,6 @@ class Sherlock(object):
         yield item.ihook.pytest_runtest_logreport
         item.ihook.pytest_runtest_logfinish(nodeid=item.nodeid, location=item.location)
 
-    @staticmethod
-    def refresh_state(item):
-        # TODO need investigate
-        _remove_cached_results_from_failed_fixtures(item)
-        _remove_failed_setup_state_from_session(item)
-        return True
-
     def reset_progress(self, collection):
         self.reporter._progress_nodeids_reported = set()
         self.reporter._session.testscollected = len(collection) + 1  # current item
@@ -213,17 +192,10 @@ class Sherlock(object):
         # TODO can I get info about modified common fixtures?
         coupled_test_names = [t.nodeid.replace("::()::", "::") for t in self._coupled]
         common_fixtures = set.intersection(*[set(t.fixturenames) for t in self._coupled])
-        msg = (
-            "Found coupled tests:\n"
-            "{coupled}\n\n"
-            "Common fixtures:\n"
-            "{common_fixtures}\n\n"
-            "How to reproduce:\npytest -l -vv {tests}\n"
-        ).format(
-            coupled="\n".join(coupled_test_names),
-            tests=" ".join(coupled_test_names),
-            common_fixtures="\n".join(common_fixtures) if common_fixtures else ""
-        )
+        msg = "Found coupled tests:\n{}\n\n".format("\n".join(coupled_test_names))
+        if common_fixtures:
+            msg += "Common fixtures:\n{}\n\n".format("\n".join(common_fixtures))
+        msg += "How to reproduce:\npytest -l -vv {}\n".format(" ".join(coupled_test_names))
         return msg
 
     @pytest.hookimpl(hookwrapper=True)
@@ -335,9 +307,7 @@ class Sherlock(object):
             reports = runtestprotocol(target_item, log=False)
             for report in reports:  # 3 reports: setup, call, teardown
                 if report.failed is True:
-                    # TODO need to rewrite
-                    # report.outcome = 'coupled'
-                    self.refresh_state(item=target_item)
+                    refresh_state(item=target_item)
                     logger(report=report)
                     failed_report = report
                     continue

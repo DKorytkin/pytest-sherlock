@@ -1,5 +1,5 @@
 setuptools==44.0.0
-six==1.13
+six==1.13.0
 pytest==3.5.1
 mock==3.0.5
 

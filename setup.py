@@ -7,7 +7,7 @@ with open("README.md", "r") as f:
 
 setup(
     name="pytest-sherlock",
-    version="0.1.17",
+    version="0.2.0",
     author="Denis Korytkin",
     author_email="dkorytkin@gmail.com",
     description="pytest plugin help to find coupled tests",
@@ -21,7 +21,7 @@ setup(
         "pytest_sherlock.sherlock",
     ],
     packages=find_packages(exclude=["tests*"]),
-    install_requires=["setuptools>=28.8.0", "pytest>=3.5.1", "six>=1.13"],
+    install_requires=["setuptools>=28.8.0", "pytest>=3.5.1", "six>=1.13.0"],
     entry_points={"pytest11": ["sherlock = pytest_sherlock.plugin"]},
     license="MIT license",
     python_requires=">=2.7",

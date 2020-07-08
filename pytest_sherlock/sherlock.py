@@ -142,9 +142,11 @@ class Collection(object):
         if self.__last is not None:
             self._set_current_status(not bool(self.__last.failed_report))
             self.__last = self._get_current_tests()
-            return self.__last
+        else:
+            self.__last = self._get_current_tests()
 
-        self.__last = self._get_current_tests()
+        if self.__last is None:
+            raise StopIteration
         return self.__last
 
     def prepare(self, test_name):

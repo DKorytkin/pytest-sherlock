@@ -3,7 +3,7 @@ import pytest
 from _pytest.config import Config
 from _pytest.nodes import Item
 
-from pytest_sherlock.sherlock import Collection, Sherlock
+from pytest_sherlock.sherlock import Collection, Sherlock, SherlockNotFoundError
 
 
 FAKE_FIXTURE_NAMES = ["my_fixture", "fixture_do_something", "other_fixture"]
@@ -96,8 +96,9 @@ class TestCollection(object):
         assert collection.test_func.nodeid == "tests/test_five.py::test_five"
 
     def test_not_found_needed_tests(self, collection):
-        with pytest.raises(RuntimeError):
-            collection._needed_tests("tests/which/not_exist.py::test_fake")
+        fake_test_name = "tests/which/not_exist.py::test_fake"
+        with pytest.raises(SherlockNotFoundError, match=fake_test_name):
+            collection._needed_tests(fake_test_name)
 
 
 class TestSherlock(object):

@@ -146,13 +146,14 @@ class Collection(object):
             self.__last = self._get_current_tests()
 
         if self.__last is None:
+            self.refresh_state()
             raise StopIteration
         return self.__last
 
     def prepare(self, test_name):
         items = self._needed_tests(test_name)
         self._bts.insert(items)
-        self.__current_root = self._bts.root
+        self.refresh_state()
 
     def _set_current_status(self, status):
         if status is True:
@@ -166,6 +167,10 @@ class Collection(object):
         if self.__current_root.left is not None:
             return Bucket(self.__current_root.left.items)
         return Bucket(self.__current_root.items)
+
+    def refresh_state(self):
+        self.__current_root = self._bts.root
+        self.__last = None
 
 
 class Sherlock(object):
@@ -312,10 +317,12 @@ class Sherlock(object):
         self.reporter.stats["failed"] = [last_report]
 
     @pytest.hookimpl(hookwrapper=True)
-    def pytest_runtest_protocol(self, item, nextitem):
+    def pytest_runtest_protocol(self, item, nextitem=None):
         """
-        :param _pytest.python.Function item:
-        :param _pytest.python.Function | None nextitem:
+        Method will run just once,
+        because session.items have just a single target test and nextitem always should be None
+        :param _pytest.python.Function item: target test
+        :param _pytest.python.Function | None nextitem: by default None
         """
         max_length = len(self.collection) + 1  # target test
         for step, bucket in enumerate(self.collection, start=1):
@@ -328,6 +335,7 @@ class Sherlock(object):
     def pytest_runtestloop(self, session):
         """
         Just fork origin pytest method and reuse own `pytest_runtest_protocol` inside
+        session.items always a list with the single target test
         :param _pytest.main.Session session:
         """
         if session.testsfailed and not session.config.option.continue_on_collection_errors:

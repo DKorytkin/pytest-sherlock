@@ -92,7 +92,7 @@ class Bucket(object):
     def __str__(self):
         return "<Bucket items={}>".format(len(self.items))
 
-    def next(self):
+    def __next__(self):
         if self.__current < len(self.items):
             item = self.items[self.__current]
             self.__current += 1
@@ -101,8 +101,7 @@ class Bucket(object):
         self.__current = 0
         raise StopIteration
 
-    def __next__(self):
-        return self.next()
+    next = __next__
 
 class Collection(object):
 
@@ -141,9 +140,6 @@ class Collection(object):
         return self
 
     def __next__(self):
-        return self.next()
-
-    def next(self):
         if self.__last is not None:
             self._set_current_status(not bool(self.__last.failed_report))
             self.__last = self._get_current_tests()
@@ -154,6 +150,8 @@ class Collection(object):
             self.refresh_state()
             raise StopIteration
         return self.__last
+
+    next = __next__
 
     def prepare(self, test_name):
         items = self._needed_tests(test_name)

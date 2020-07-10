@@ -103,6 +103,7 @@ class Bucket(object):
 
     next = __next__
 
+
 class Collection(object):
 
     def __init__(self, items):

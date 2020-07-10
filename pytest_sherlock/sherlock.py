@@ -101,6 +101,8 @@ class Bucket(object):
         self.__current = 0
         raise StopIteration
 
+    def __next__(self):
+        return self.next()
 
 class Collection(object):
 
@@ -137,6 +139,9 @@ class Collection(object):
 
     def __iter__(self):
         return self
+
+    def __next__(self):
+        return self.next()
 
     def next(self):
         if self.__last is not None:
@@ -307,14 +312,14 @@ class Sherlock(object):
         else:
             message = str(failed_report.longrepr)
         failed_report.longrepr = "\n{}\n\n{}".format(write_coupled_report(coupled), message)
-        node_reporter = _NodeReporter(target_item.nodeid, self.config._xml)
-        node_reporter.append_failure(failed_report)
-        node_reporter.finalize()
-        self.config._xml.node_reporters_ordered[:] = [node_reporter]
-        self.config._xml.stats["failure"] = 1
-        reports = self.reporter.getreports("failed")
-        last_report = reports[-1]
-        self.reporter.stats["failed"] = [last_report]
+        self.reporter.stats["failed"] = [failed_report]
+        xml = getattr(self.config, "_xml", None)
+        if xml:
+            node_reporter = _NodeReporter(target_item.nodeid, xml)
+            node_reporter.append_failure(failed_report)
+            node_reporter.finalize()
+            xml.node_reporters_ordered[:] = [node_reporter]
+            xml.stats["failure"] = 1
 
     @pytest.hookimpl(hookwrapper=True)
     def pytest_runtest_protocol(self, item, nextitem=None):

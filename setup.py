@@ -7,7 +7,7 @@ with open("README.md", "r") as f:
 
 setup(
     name="pytest-sherlock",
-    version="0.2.0",
+    version="0.2.1",
     author="Denis Korytkin",
     author_email="dkorytkin@gmail.com",
     description="pytest plugin help to find coupled tests",
@@ -27,7 +27,7 @@ setup(
     python_requires=">=2.7",
     classifiers=[
         "Framework :: Pytest",
-        "Development Status :: 4 - Beta",
+        "Development Status :: 5 - Production/Stable",
         "Programming Language :: Python :: 2.7",
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",

@@ -3,7 +3,13 @@ import pytest
 from _pytest.config import Config
 from _pytest.nodes import Item
 
-from pytest_sherlock.sherlock import Collection, Sherlock, SherlockNotFoundError
+from pytest_sherlock.binary_tree_search import Root
+from pytest_sherlock.sherlock import (
+    Bucket,
+    Collection,
+    Sherlock,
+    SherlockNotFoundError,
+)
 
 
 FAKE_FIXTURE_NAMES = ["my_fixture", "fixture_do_something", "other_fixture"]
@@ -52,18 +58,68 @@ def collection(items):
 
 
 @pytest.fixture(scope="function")
-def sherlock_with_prepared_collection(sherlock, collection, target_item):
-    sherlock.collection = collection
-    sherlock.collection.prepare(target_item.nodeid)
+def prepared_collection(items, target_item):
+    c = Collection(items)
+    c.prepare(target_item.nodeid)
+    return c
+
+
+@pytest.fixture(scope="function")
+def sherlock_with_prepared_collection(sherlock, prepared_collection):
+    sherlock.collection = prepared_collection
     return sherlock
 
 
 class TestCollection(object):
 
-    def test_create_instance(self, items):
-        tc = Collection(items)
-        assert tc.items == items
-        assert tc.test_func is None
+    def test_create_instance(self, collection, items):
+        assert collection.items == items
+        assert collection.test_func is None
+        assert isinstance(collection.bts, Root)
+        assert collection.bts.root is None
+        assert collection.current_root is None
+        assert collection.last is None
+
+    def test_prepare_collection(self, prepared_collection):
+        assert prepared_collection.last is None
+        assert prepared_collection.bts.root is not None
+        assert prepared_collection.current_root == prepared_collection.bts.root
+        # TODO check insert method
+
+    def test_raw_collection_length(self, collection):
+        assert len(collection) == 0
+
+    def test_prepared_collection_length(self, prepared_collection):
+        assert len(prepared_collection) == 2
+
+    @pytest.mark.parametrize('report, exp_buckets', (
+        (
+            None,
+            [
+                ["tests/test_tree.py::test_tree", "tests/test_one.py::test_one"], # Step [1 of 3]
+                ["tests/test_two.py::test_two"],  # Step [2 of 3]
+                ["tests/test_four.py::test_four"],  # Step [3 of 3], not found any coupled
+            ]
+        ),
+        (
+            mock.MagicMock(),
+            [
+                ["tests/test_tree.py::test_tree", "tests/test_one.py::test_one"],  # Step [1 of 3]
+                ["tests/test_tree.py::test_tree"],  # Step [2 of 3], the last because found coupled
+            ]
+        )
+    ))
+    def test_iteration_by_collection(self, prepared_collection, exp_buckets, report):
+        for idx, bucket in enumerate(prepared_collection):
+            assert isinstance(bucket, Bucket)
+            test_ids = [i.nodeid for i in bucket.items]
+            assert test_ids == exp_buckets[idx]
+            assert prepared_collection.last == bucket
+            bucket.failed_report = report
+
+        # after completed, refresh state
+        assert prepared_collection.last is None
+        assert prepared_collection.current_root == prepared_collection.bts.root
 
     @pytest.mark.parametrize(
         "by",
@@ -100,6 +156,45 @@ class TestCollection(object):
         with pytest.raises(SherlockNotFoundError, match=fake_test_name):
             collection._needed_tests(fake_test_name)
 
+    @pytest.mark.parametrize('status, direction', ((True, 'left'), (False, 'right')))
+    def test_update_root_by_status(self, prepared_collection, status, direction):
+        origin_root = prepared_collection.current_root
+        prepared_collection.update_root_by_status(status)
+        assert prepared_collection.current_root != origin_root
+        assert prepared_collection.current_root == getattr(origin_root, direction)
+
+    def test_get_current_tests_by_left_direction(self, prepared_collection):
+        bucket = prepared_collection._get_current_tests()
+        assert isinstance(bucket, Bucket)
+        assert bucket.items == prepared_collection.current_root.left.items
+
+    def test_get_current_tests_by_right_direction(self, prepared_collection):
+        prepared_collection.current_root.left = None
+        bucket = prepared_collection._get_current_tests()
+        assert isinstance(bucket, Bucket)
+        assert bucket.items == prepared_collection.current_root.right.items
+
+    def test_get_last_current_tests(self, prepared_collection):
+        prepared_collection.current_root.left = None
+        prepared_collection.current_root.right = None
+        bucket = prepared_collection._get_current_tests()
+        assert bucket.items == prepared_collection.current_root.items
+
+    def test_not_found_current_tests(self, prepared_collection):
+        prepared_collection.current_root = None
+        assert prepared_collection._get_current_tests() is None
+
+    def test_refresh_state(self, prepared_collection):
+        first_bucket = next(prepared_collection)
+        assert prepared_collection.last == first_bucket
+        assert prepared_collection.current_root == prepared_collection.bts.root
+        second_bucket = next(prepared_collection)
+        assert prepared_collection.last == second_bucket
+        assert prepared_collection.current_root != prepared_collection.bts.root
+        prepared_collection.refresh_state()
+        assert prepared_collection.last is None
+        assert prepared_collection.current_root == prepared_collection.bts.root
+
 
 class TestSherlock(object):
 
@@ -116,6 +211,7 @@ class TestSherlock(object):
         config = mock.MagicMock(spec=Config)  # pytest config
         sherlock = Sherlock(config)
         assert sherlock.config == config
+        assert sherlock.collection is None
         assert sherlock._tw is None
         assert sherlock._reporter is None
         assert sherlock._coupled is None
@@ -144,34 +240,31 @@ class TestSherlock(object):
         exp_msg = "Step [{} of 666]:".format(line)
         sherlock.terminal.sep.assert_called_once_with("_", exp_msg, yellow=True, bold=True)
 
-    @pytest.mark.skip("need to fix")
     def test_log(self, sherlock, target_item):
-        with mock.patch(
-                "pytest_sherlock.sherlock.Sherlock.reporter",
-                new_callable=mock.PropertyMock,
-        ) as m:
-            m.return_value = mock.MagicMock(**{"pytest_runtest_logreport.return_value": True})
-            with sherlock.log(target_item) as logger:
-                target_item.ihook.pytest_runtest_logstart.assert_called_once_with(
-                    nodeid=target_item.nodeid, location=target_item.location
-                )
-                assert logger() is True
-            target_item.ihook.pytest_runtest_logreport.assert_called_once()
-            target_item.ihook.pytest_runtest_logfinish.assert_called_once_with(
-                nodeid=target_item.nodeid
+        with sherlock.log(target_item) as logger:
+            target_item.ihook.pytest_runtest_logstart.assert_called_once_with(
+                nodeid=target_item.nodeid, location=target_item.location
             )
+            assert logger()
+        target_item.ihook.pytest_runtest_logreport.assert_called_once()
+        target_item.ihook.pytest_runtest_logfinish.assert_called_once_with(
+            nodeid=target_item.nodeid, location=target_item.location
+        )
 
     @pytest.mark.parametrize("by", ("name", "nodeid"))
     def test_pytest_collection_modifyitems_with_option(self, sherlock, items, target_item, by):
         config = mock.MagicMock()
         config.getoption.return_value = True
         config.option.flaky_test = getattr(target_item, by)
+        assert sherlock.collection is None
         next(
             sherlock.pytest_collection_modifyitems(
                 session=mock.MagicMock(), config=config, items=items
             )
         )
         assert items == [target_item]
+        assert isinstance(sherlock.collection, Collection)
+        assert sherlock.collection.items == [target_item]
         config.getoption.assert_called_once()
 
     @pytest.mark.parametrize("by", ("name", "nodeid"))

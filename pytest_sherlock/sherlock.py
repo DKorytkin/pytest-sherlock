@@ -109,9 +109,9 @@ class Collection(object):
     def __init__(self, items):
         self.items = items
         self.test_func = None
-        self._bts = BTSRoot()
-        self.__current_root = None
-        self.__last = None
+        self.last = None
+        self.current_root = None
+        self.bts = BTSRoot()
 
     def _needed_tests(self, test_name):
         tests = []
@@ -124,7 +124,7 @@ class Collection(object):
         if self.test_func is None:
             raise SherlockNotFoundError(test_name)
 
-        tests[:] = sorted(
+        self.items[:] = sorted(
             tests,
             key=lambda item: (
                 len(set(item.fixturenames) & set(self.test_func.fixturenames)),
@@ -132,49 +132,62 @@ class Collection(object):
             ),
             reverse=True,
         )
-        return tests
+        return self.items
 
     def __len__(self):
-        return len(self._bts)
+        return len(self.bts)
 
     def __iter__(self):
         return self
 
     def __next__(self):
-        if self.__last is not None:
-            self._set_current_status(not bool(self.__last.failed_report))
-            self.__last = self._get_current_tests()
+        if self.last is not None:
+            has_report = bool(self.last.failed_report)
+            self.update_root_by_status(status=has_report)
+            self.last = self._get_current_tests()
         else:
-            self.__last = self._get_current_tests()
+            self.last = self._get_current_tests()
 
-        if self.__last is None:
+        if self.last is None:
             self.refresh_state()
             raise StopIteration
-        return self.__last
+        return self.last
 
     next = __next__
 
     def prepare(self, test_name):
         items = self._needed_tests(test_name)
-        self._bts.insert(items)
+        self.bts.insert(items)
         self.refresh_state()
 
-    def _set_current_status(self, status):
-        if status is True:
-            self.__current_root = self.__current_root.right
-        else:
-            self.__current_root = self.__current_root.left
+    def update_root_by_status(self, status):
+        if status is False:
+            self.current_root = self.current_root.right
+            return
+
+        if self.last and len(self.last) == 1:
+            # The last bucked has just one test and target tests failed after it
+            # Found coupled tests
+            self.current_root = None
+            return
+
+        self.current_root = self.current_root.left
 
     def _get_current_tests(self):
-        if self.__current_root is None:
-            return
-        if self.__current_root.left is not None:
-            return Bucket(self.__current_root.left.items)
-        return Bucket(self.__current_root.items)
+        if self.current_root is None:
+            return None
+
+        if self.current_root.left is not None:
+            return Bucket(self.current_root.left.items)
+        if self.current_root.right is not None:
+            return Bucket(self.current_root.right.items)
+
+        # the last tests (should be just one test) which should be check
+        return Bucket(self.current_root.items)
 
     def refresh_state(self):
-        self.__current_root = self._bts.root
-        self.__last = None
+        self.current_root = self.bts.root
+        self.last = None
 
 
 class Sherlock(object):

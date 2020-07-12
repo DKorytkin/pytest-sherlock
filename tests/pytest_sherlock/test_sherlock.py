@@ -2,13 +2,19 @@ import mock
 import pytest
 from _pytest.config import Config
 from _pytest.nodes import Item
+from _pytest.runner import TestReport as PytestReport
 
 from pytest_sherlock.binary_tree_search import Root
 from pytest_sherlock.sherlock import (
     Bucket,
     Collection,
     Sherlock,
+    SherlockError,
     SherlockNotFoundError,
+    refresh_state,
+    write_coupled_report,
+    _remove_cached_results_from_failed_fixtures,
+    _remove_failed_setup_state_from_session,
 )
 
 
@@ -70,6 +76,137 @@ def sherlock_with_prepared_collection(sherlock, prepared_collection):
     return sherlock
 
 
+class TestCleanupItem(object):
+
+    @pytest.fixture()
+    def fixtures(self):
+        mock_fixtures = (
+            mock.MagicMock(cached_result="1", argname="fixture1"),
+            mock.MagicMock(cached_result=2, argname="fixture2"),
+        )
+        return {f.argname: (f, ) for f in mock_fixtures}
+
+    @pytest.fixture()
+    def stack(self):
+        return [mock.MagicMock(_prepare_exc=1)]
+
+    @pytest.fixture()
+    def called_item(self, target_item, fixtures, stack):
+        # added cached results of fixtures
+        target_item._fixtureinfo = mock.MagicMock(name2fixturedefs=fixtures)
+        # added cache to session
+        target_item.session = mock.MagicMock(_setupstate=mock.MagicMock(stack=stack))
+        return target_item
+
+    @staticmethod
+    def check_cleanup_fixtures(fixtures):
+        assert fixtures
+        for fixture_name, funcs in fixtures.items():
+            for func in funcs:
+                assert func.cached_result is None, "cached_result wasn't cleanup"
+
+    @staticmethod
+    def check_cleanup_stack(stack):
+        assert stack
+        for s in stack:
+            assert not hasattr(s, "_prepare_exc"), "_prepare_exc wasn't delete"
+
+    def test_refresh_state(self, called_item, fixtures, stack):
+        assert refresh_state(called_item)
+        self.check_cleanup_fixtures(fixtures)
+        self.check_cleanup_stack(stack)
+
+    def test_write_coupled_report_without_fixtures(self, called_item):
+        coupled_tests = [
+            make_fake_test_item("test1"),
+            make_fake_test_item("test2"),
+        ]
+        exp_message = (
+            "Found coupled tests:\n"
+            "tests/test_test1.py::test_test1\n"
+            "tests/test_test2.py::test_test2\n\n"
+            "How to reproduce:\n"
+            "pytest -l -vv tests/test_test1.py::test_test1 tests/test_test2.py::test_test2\n"
+        )
+        assert write_coupled_report(coupled_tests) == exp_message
+
+    def test_write_coupled_report_with_common_fixtures(self, called_item):
+        coupled_tests = [
+            make_fake_test_item("test1", "fixture1", "fixture2"),
+            make_fake_test_item("test2", "fixture2"),
+        ]
+        exp_message = (
+            "Found coupled tests:\n"
+            "tests/test_test1.py::test_test1\n"
+            "tests/test_test2.py::test_test2\n\n"
+            "Common fixtures:\n"
+            "fixture2\n\n"
+            "How to reproduce:\n"
+            "pytest -l -vv tests/test_test1.py::test_test1 tests/test_test2.py::test_test2\n"
+        )
+        assert write_coupled_report(coupled_tests) == exp_message
+
+    def test_write_coupled_report_without_common_fixtures(self, called_item):
+        coupled_tests = [
+            make_fake_test_item("test1", "fixture1", "fixture2"),
+            make_fake_test_item("test2", "fixture3"),
+        ]
+        exp_message = (
+            "Found coupled tests:\n"
+            "tests/test_test1.py::test_test1\n"
+            "tests/test_test2.py::test_test2\n\n"
+            "How to reproduce:\n"
+            "pytest -l -vv tests/test_test1.py::test_test1 tests/test_test2.py::test_test2\n"
+        )
+        assert write_coupled_report(coupled_tests) == exp_message
+
+    def test_remove_cached_results_from_failed_fixtures(self, called_item, fixtures):
+        assert _remove_cached_results_from_failed_fixtures(called_item)
+        self.check_cleanup_fixtures(fixtures)
+
+    def test_remove_failed_setup_state_from_session(self, called_item, stack):
+        assert _remove_failed_setup_state_from_session(called_item)
+        self.check_cleanup_stack(stack)
+
+
+class TestBucket(object):
+
+    @pytest.fixture()
+    def bucket(self, items):
+        return Bucket(items)
+
+    def test_crete_instance(self, bucket, items):
+        assert bucket.items == items
+        assert bucket.failed_report is None
+        assert bucket._failed_report is None
+
+    def test_valid_failed_report_types(self, bucket):
+        assert bucket.report_valid_types == (PytestReport, type(None))
+
+    def test_as_string(self, bucket):
+        assert str(bucket) == "<Bucket items=6>"
+
+    def test_length(self, bucket):
+        assert len(bucket) == 6
+
+    def test_getitem_by_index(self, bucket):
+        assert bucket[4].nodeid == "tests/test_five.py::test_five"
+
+    def test_iteration(self, bucket, items):
+        for idx, item in enumerate(bucket):
+            assert item == items[idx]
+
+    @pytest.mark.parametrize("report", (None, mock.MagicMock(spec=PytestReport)))
+    def test_set_failed_report(self, bucket, report):
+        bucket.failed_report = report
+        assert bucket.failed_report == report
+        assert bucket._failed_report == report
+
+    def test_set_not_valid_failed_report(self, bucket):
+        with pytest.raises(SherlockError, match="Not valid type of report"):
+            bucket.failed_report = mock.MagicMock()
+
+
 class TestCollection(object):
 
     def test_create_instance(self, collection, items):
@@ -102,7 +239,7 @@ class TestCollection(object):
             ]
         ),
         (
-            mock.MagicMock(),
+            mock.MagicMock(spec=PytestReport),
             [
                 ["tests/test_tree.py::test_tree", "tests/test_one.py::test_one"],  # Step [1 of 3]
                 ["tests/test_tree.py::test_tree"],  # Step [2 of 3], the last because found coupled
@@ -115,7 +252,7 @@ class TestCollection(object):
             test_ids = [i.nodeid for i in bucket.items]
             assert test_ids == exp_buckets[idx]
             assert prepared_collection.last == bucket
-            bucket.failed_report = report
+            bucket.failed_report = report  # should be None or TestReport
 
         # after completed, refresh state
         assert prepared_collection.last is None

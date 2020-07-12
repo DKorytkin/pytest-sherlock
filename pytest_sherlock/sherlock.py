@@ -2,13 +2,17 @@ import contextlib
 
 import pytest
 import six
-from _pytest.runner import runtestprotocol
+from _pytest.runner import runtestprotocol, TestReport
 from _pytest.junitxml import _NodeReporter
 
 from pytest_sherlock.binary_tree_search import Root as BTSRoot
 
 
-class SherlockNotFoundError(Exception):
+class SherlockError(Exception):
+    pass
+
+
+class SherlockNotFoundError(SherlockError):
     def __init__(self, test_name):
         self.test_name = test_name
         super(SherlockNotFoundError, self).__init__()
@@ -29,10 +33,10 @@ def _remove_cached_results_from_failed_fixtures(item):
     """
     cached_result = 'cached_result'
     fixture_info = getattr(item, '_fixtureinfo', None)
-    for fixture_def_str in getattr(fixture_info, 'name2fixturedefs', ()):
+    for fixture_def_str in getattr(fixture_info, 'name2fixturedefs', {}):
         fixture_defs = fixture_info.name2fixturedefs[fixture_def_str]
         for fixture_def in fixture_defs:
-            setattr(fixture_def, cached_result, None)  # cleanup cache
+            setattr(fixture_def, cached_result, None)  # cleanup cached fixtures
     return True
 
 
@@ -72,10 +76,13 @@ def write_coupled_report(coupled_tests):
 
 
 class Bucket(object):
+
+    report_valid_types = (TestReport, type(None))
+
     def __init__(self, items):
         self.items = items
+        self._failed_report = None
         self.__current = 0
-        self.failed_report = None
 
     def __len__(self):
         return len(self.items)
@@ -102,6 +109,20 @@ class Bucket(object):
         raise StopIteration
 
     next = __next__
+
+    @property
+    def failed_report(self):
+        return self._failed_report
+
+    @failed_report.setter
+    def failed_report(self, value):
+        if not isinstance(value, self.report_valid_types):
+            raise SherlockError(
+                "Not valid type of report {}, should be one of {}".format(
+                    type(value), self.report_valid_types
+                )
+            )
+        self._failed_report = value
 
 
 class Collection(object):
@@ -148,10 +169,11 @@ class Collection(object):
         else:
             self.last = self._get_current_tests()
 
-        if self.last is None:
-            self.refresh_state()
-            raise StopIteration
-        return self.last
+        if self.last is not None:
+            return self.last
+
+        self.refresh_state()
+        raise StopIteration
 
     next = __next__
 

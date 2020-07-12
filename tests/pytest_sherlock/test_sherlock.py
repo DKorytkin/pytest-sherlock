@@ -186,6 +186,9 @@ class TestBucket(object):
     def test_as_string(self, bucket):
         assert str(bucket) == "<Bucket items=6>"
 
+    def test_representation(self, bucket):
+        assert repr(bucket) == str(bucket.items)
+
     def test_length(self, bucket):
         assert len(bucket) == 6
 

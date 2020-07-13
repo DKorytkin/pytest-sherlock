@@ -1,7 +1,8 @@
 import mock
 import pytest
 from _pytest.config import Config
-from _pytest.nodes import Item
+from _pytest.junitxml import _NodeReporter
+from _pytest.python import Function
 from _pytest.runner import TestReport as PytestReport
 
 from pytest_sherlock.binary_tree_search import Root
@@ -22,9 +23,9 @@ FAKE_FIXTURE_NAMES = ["my_fixture", "fixture_do_something", "other_fixture"]
 
 
 def make_fake_test_item(name, *fixtures):
-    pytest_func = mock.MagicMock(spec=Item)
+    pytest_func = mock.MagicMock(spec=Function)
     pytest_func.name = "test_{}".format(name)
-    node = mock.MagicMock(spec=Item)
+    node = mock.MagicMock(spec=Function)
     node.nodeid = "tests/test_{}.py".format(name)
     pytest_func.parent = node
     pytest_func.nodeid = "{}::{}".format(pytest_func.parent.nodeid, pytest_func.name)
@@ -347,6 +348,39 @@ class TestSherlock(object):
     def sherlock(self, config):
         return Sherlock(config=config)
 
+    @pytest.fixture()
+    def sherlock_with_failures(self, sherlock):
+        sherlock._reporter = mock.MagicMock(stats={"failed": [1, 2, 3, 4]})
+        return sherlock
+
+    @pytest.fixture()
+    def mock_coupled(self):
+        mock_coupled = [
+            make_fake_test_item("test1"),
+            make_fake_test_item("test2"),
+        ]
+        return mock_coupled
+
+    @pytest.fixture()
+    def mock_report_str(self):
+        return mock.MagicMock(spec=PytestReport, longrepr="AssertError: 1 != 2")
+
+    @pytest.fixture()
+    def mock_report_class(self):
+        class LongReprStub(object):
+            def __init__(self, msg):
+                self.msg = msg
+
+            def __str__(self):
+                return self.msg
+
+        return mock.MagicMock(spec=PytestReport, longrepr=LongReprStub("AssertError: 1 != 2"))
+
+    @pytest.fixture()
+    def mock_report_crash(self):
+        longrepr = mock.MagicMock(reprcrash=mock.MagicMock(message="AssertError: 1 != 2"))
+        return mock.MagicMock(spec=PytestReport, longrepr=longrepr)
+
     def test_create_instance(self):
         config = mock.MagicMock(spec=Config)  # pytest config
         sherlock = Sherlock(config)
@@ -379,6 +413,15 @@ class TestSherlock(object):
         sherlock.reporter.ensure_newline.assert_called_once()
         exp_msg = "Step [{} of 666]:".format(line)
         sherlock.terminal.sep.assert_called_once_with("_", exp_msg, yellow=True, bold=True)
+
+    def test_terminal_reset_progress(self, sherlock, prepared_collection):
+        mock_session = mock.MagicMock(testscollected=6)
+        sherlock._reporter = mock.MagicMock(
+            _progress_nodeids_reported={1, 2}, _session=mock_session
+        )
+        sherlock.reset_progress(prepared_collection)
+        assert sherlock.reporter._session.testscollected == len(prepared_collection) + 1
+        assert sherlock.reporter._progress_nodeids_reported == set()
 
     def test_log(self, sherlock, target_item):
         with sherlock.log(target_item) as logger:
@@ -454,3 +497,55 @@ class TestSherlock(object):
             config=mock.MagicMock(), startdir=mock.MagicMock(), items=items
         )
         assert report == "Try to find coupled tests in [2-3] steps"
+
+    @pytest.mark.parametrize(
+        "report_type",
+        ("mock_report_str", "mock_report_class", "mock_report_crash")
+    )
+    def test_patch_report_with_different_longrepr_type(
+        self, request, sherlock_with_failures, mock_coupled, report_type
+    ):
+        report = request.getfixturevalue(report_type)
+        assert sherlock_with_failures.patch_report(failed_report=report, coupled=mock_coupled)
+        exp_report_message = (
+            "\n"
+            "Found coupled tests:\n"
+            "tests/test_test1.py::test_test1\n"
+            "tests/test_test2.py::test_test2\n"
+            "\n"
+            "How to reproduce:\n"
+            "pytest -l -vv tests/test_test1.py::test_test1 tests/test_test2.py::test_test2\n"
+            "\n"
+            "\n"
+            "AssertError: 1 != 2"
+        )
+        assert report.longrepr == exp_report_message, "Report message wasn't changed"
+        assert sherlock_with_failures.reporter.stats["failed"] == [report]
+
+    def test_patch_report_with_xml(self, sherlock_with_failures, mock_coupled, mock_report_str):
+        node_reporters = [
+            mock.MagicMock(spec=_NodeReporter),
+            mock.MagicMock(spec=_NodeReporter),
+            mock.MagicMock(spec=_NodeReporter),
+        ]
+        mock_xml = mock.MagicMock(node_reporters_ordered=node_reporters, stats={"failure": 4})
+        sherlock_with_failures.config._xml = mock_xml
+        assert sherlock_with_failures.patch_report(
+            failed_report=mock_report_str, coupled=mock_coupled
+        )
+        exp_report_message = (
+            "\n"
+            "Found coupled tests:\n"
+            "tests/test_test1.py::test_test1\n"
+            "tests/test_test2.py::test_test2\n"
+            "\n"
+            "How to reproduce:\n"
+            "pytest -l -vv tests/test_test1.py::test_test1 tests/test_test2.py::test_test2\n"
+            "\n"
+            "\n"
+            "AssertError: 1 != 2"
+        )
+        assert mock_report_str.longrepr == exp_report_message
+        assert sherlock_with_failures.reporter.stats["failed"] == [mock_report_str]
+        assert len(mock_xml.node_reporters_ordered) == 1
+        assert mock_xml.stats["failure"] == 1

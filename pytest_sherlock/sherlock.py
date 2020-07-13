@@ -354,6 +354,7 @@ class Sherlock(object):
             node_reporter.finalize()
             xml.node_reporters_ordered[:] = [node_reporter]
             xml.stats["failure"] = 1
+        return True
 
     @pytest.hookimpl(hookwrapper=True)
     def pytest_runtest_protocol(self, item, nextitem=None):

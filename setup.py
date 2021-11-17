@@ -1,4 +1,4 @@
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
 
 VERSION_FILE = "pytest_sherlock/_version.py"
 

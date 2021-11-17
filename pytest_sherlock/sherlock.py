@@ -1,9 +1,11 @@
+from __future__ import absolute_import
+
 import contextlib
 
 import pytest
 import six
-from _pytest.runner import runtestprotocol, TestReport
 from _pytest.junitxml import _NodeReporter
+from _pytest.runner import TestReport, runtestprotocol
 
 from pytest_sherlock.binary_tree_search import Root as BTSRoot
 
@@ -17,23 +19,20 @@ class SherlockNotFoundError(SherlockError):
         self.test_name = test_name
         super(SherlockNotFoundError, self).__init__()
 
-    def message(self):
+    def __str__(self):
         return (
             "Test not found: {}. "
             "Please validate your test name (ex: 'tests/unit/test_one.py::test_first')"
         ).format(self.test_name)
-
-    def __str__(self):
-        return self.message()
 
 
 def _remove_cached_results_from_failed_fixtures(item):
     """
     Note: remove all cached_result attribute from every fixture
     """
-    cached_result = 'cached_result'
-    fixture_info = getattr(item, '_fixtureinfo', None)
-    for fixture_def_str in getattr(fixture_info, 'name2fixturedefs', {}):
+    cached_result = "cached_result"
+    fixture_info = getattr(item, "_fixtureinfo", None)
+    for fixture_def_str in getattr(fixture_info, "name2fixturedefs", {}):
         fixture_defs = fixture_info.name2fixturedefs[fixture_def_str]
         for fixture_def in fixture_defs:
             setattr(fixture_def, cached_result, None)  # cleanup cached fixtures
@@ -46,7 +45,7 @@ def _remove_failed_setup_state_from_session(item):
     cleaning the stack itself
     """
     prepare_exc = "_prepare_exc"
-    setup_state = getattr(item.session, '_setupstate')
+    setup_state = getattr(item.session, "_setupstate")
     for col in setup_state.stack:
         if hasattr(col, prepare_exc):
             delattr(col, prepare_exc)
@@ -126,7 +125,6 @@ class Bucket(object):
 
 
 class Collection(object):
-
     def __init__(self, items):
         self.items = items
         self.test_func = None
@@ -149,7 +147,7 @@ class Collection(object):
             tests,
             key=lambda item: (
                 len(set(item.fixturenames) & set(self.test_func.fixturenames)),
-                item.parent.nodeid  # TODO add AST analise
+                item.parent.nodeid,  # TODO add AST analise
             ),
             reverse=True,
         )
@@ -245,7 +243,7 @@ class Sherlock(object):
         """
         self.reporter.ensure_newline()
         message = "Step [{} of {}]:".format(step, maximum)
-        self.terminal.sep('_', message, yellow=True, bold=True)
+        self.terminal.sep("_", message, yellow=True, bold=True)
 
     @contextlib.contextmanager
     def log(self, item):
@@ -345,7 +343,9 @@ class Sherlock(object):
             message = failed_report.longrepr
         else:
             message = str(failed_report.longrepr)
-        failed_report.longrepr = "\n{}\n\n{}".format(write_coupled_report(coupled), message)
+        failed_report.longrepr = "\n{}\n\n{}".format(
+            write_coupled_report(coupled), message
+        )
         self.reporter.stats["failed"] = [failed_report]
         xml = getattr(self.config, "_xml", None)
         if xml:
@@ -378,8 +378,13 @@ class Sherlock(object):
         session.items always a list with the single target test
         :param _pytest.main.Session session:
         """
-        if session.testsfailed and not session.config.option.continue_on_collection_errors:
-            raise session.Interrupted("%d errors during collection" % session.testsfailed)
+        if (
+            session.testsfailed
+            and not session.config.option.continue_on_collection_errors
+        ):
+            raise session.Interrupted(
+                "%d errors during collection" % session.testsfailed
+            )
 
         if session.config.option.collectonly:
             return True
@@ -406,7 +411,7 @@ class Sherlock(object):
                 reports = runtestprotocol(item=test_func, nextitem=next_item, log=False)
                 for report in reports:  # 3 reports: setup, call, teardown
                     if report.failed is True:
-                        report.outcome = 'flaky'
+                        report.outcome = "flaky"
                     logger(report=report)
 
     def call_target(self, target_item):

@@ -1,6 +1,6 @@
 import pytest
 
-from pytest_sherlock.binary_tree_search import Root, Node
+from pytest_sherlock.binary_tree_search import Node, Root
 
 
 @pytest.fixture()

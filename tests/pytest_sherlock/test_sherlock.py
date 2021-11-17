@@ -12,12 +12,11 @@ from pytest_sherlock.sherlock import (
     Sherlock,
     SherlockError,
     SherlockNotFoundError,
-    refresh_state,
-    write_coupled_report,
     _remove_cached_results_from_failed_fixtures,
     _remove_failed_setup_state_from_session,
+    refresh_state,
+    write_coupled_report,
 )
-
 
 FAKE_FIXTURE_NAMES = ["my_fixture", "fixture_do_something", "other_fixture"]
 
@@ -45,7 +44,9 @@ def target_item():
 
 @pytest.fixture(scope="function")
 def items(target_item):
-    pytest_items = [make_fake_test_item(item) for item in ["one", "two", "tree", "four", "six"]]
+    pytest_items = [
+        make_fake_test_item(item) for item in ["one", "two", "tree", "four", "six"]
+    ]
     pytest_items.insert(4, target_item)  # between four and six
 
     # ['other_fixture'] for test_one
@@ -78,14 +79,13 @@ def sherlock_with_prepared_collection(sherlock, prepared_collection):
 
 
 class TestCleanupItem(object):
-
     @pytest.fixture()
     def fixtures(self):
         mock_fixtures = (
             mock.MagicMock(cached_result="1", argname="fixture1"),
             mock.MagicMock(cached_result=2, argname="fixture2"),
         )
-        return {f.argname: (f, ) for f in mock_fixtures}
+        return {f.argname: (f,) for f in mock_fixtures}
 
     @pytest.fixture()
     def stack(self):
@@ -171,7 +171,6 @@ class TestCleanupItem(object):
 
 
 class TestBucket(object):
-
     @pytest.fixture()
     def bucket(self, items):
         return Bucket(items)
@@ -212,7 +211,6 @@ class TestBucket(object):
 
 
 class TestCollection(object):
-
     def test_create_instance(self, collection, items):
         assert collection.items == items
         assert collection.test_func is None
@@ -233,23 +231,36 @@ class TestCollection(object):
     def test_prepared_collection_length(self, prepared_collection):
         assert len(prepared_collection) == 2
 
-    @pytest.mark.parametrize('report, exp_buckets', (
+    @pytest.mark.parametrize(
+        "report, exp_buckets",
         (
-            None,
-            [
-                ["tests/test_tree.py::test_tree", "tests/test_one.py::test_one"], # Step [1 of 3]
-                ["tests/test_two.py::test_two"],  # Step [2 of 3]
-                ["tests/test_four.py::test_four"],  # Step [3 of 3], not found any coupled
-            ]
+            (
+                None,
+                [
+                    [
+                        "tests/test_tree.py::test_tree",
+                        "tests/test_one.py::test_one",
+                    ],  # Step [1 of 3]
+                    ["tests/test_two.py::test_two"],  # Step [2 of 3]
+                    [
+                        "tests/test_four.py::test_four"
+                    ],  # Step [3 of 3], not found any coupled
+                ],
+            ),
+            (
+                mock.MagicMock(spec=PytestReport),
+                [
+                    [
+                        "tests/test_tree.py::test_tree",
+                        "tests/test_one.py::test_one",
+                    ],  # Step [1 of 3]
+                    [
+                        "tests/test_tree.py::test_tree"
+                    ],  # Step [2 of 3], the last because found coupled
+                ],
+            ),
         ),
-        (
-            mock.MagicMock(spec=PytestReport),
-            [
-                ["tests/test_tree.py::test_tree", "tests/test_one.py::test_one"],  # Step [1 of 3]
-                ["tests/test_tree.py::test_tree"],  # Step [2 of 3], the last because found coupled
-            ]
-        )
-    ))
+    )
     def test_iteration_by_collection(self, prepared_collection, exp_buckets, report):
         for idx, bucket in enumerate(prepared_collection):
             assert isinstance(bucket, Bucket)
@@ -263,9 +274,7 @@ class TestCollection(object):
         assert prepared_collection.current_root == prepared_collection.bts.root
 
     @pytest.mark.parametrize(
-        "by",
-        ("test_five", "tests/test_five.py::test_five"),
-        ids=["name", "node_id"]
+        "by", ("test_five", "tests/test_five.py::test_five"), ids=["name", "node_id"]
     )
     def test_find_needed_tests(self, collection, by):
         """
@@ -297,7 +306,7 @@ class TestCollection(object):
         with pytest.raises(SherlockNotFoundError, match=fake_test_name):
             collection._needed_tests(fake_test_name)
 
-    @pytest.mark.parametrize('status, direction', ((True, 'left'), (False, 'right')))
+    @pytest.mark.parametrize("status, direction", ((True, "left"), (False, "right")))
     def test_update_root_by_status(self, prepared_collection, status, direction):
         origin_root = prepared_collection.current_root
         prepared_collection.update_root_by_status(status)
@@ -338,7 +347,6 @@ class TestCollection(object):
 
 
 class TestSherlock(object):
-
     @pytest.fixture()
     def config(self):
         plugin_manager = mock.MagicMock()
@@ -374,11 +382,15 @@ class TestSherlock(object):
             def __str__(self):
                 return self.msg
 
-        return mock.MagicMock(spec=PytestReport, longrepr=LongReprStub("AssertError: 1 != 2"))
+        return mock.MagicMock(
+            spec=PytestReport, longrepr=LongReprStub("AssertError: 1 != 2")
+        )
 
     @pytest.fixture()
     def mock_report_crash(self):
-        longrepr = mock.MagicMock(reprcrash=mock.MagicMock(message="AssertError: 1 != 2"))
+        longrepr = mock.MagicMock(
+            reprcrash=mock.MagicMock(message="AssertError: 1 != 2")
+        )
         return mock.MagicMock(spec=PytestReport, longrepr=longrepr)
 
     def test_create_instance(self):
@@ -412,7 +424,9 @@ class TestSherlock(object):
         sherlock.write_step(line, 666)
         sherlock.reporter.ensure_newline.assert_called_once()
         exp_msg = "Step [{} of 666]:".format(line)
-        sherlock.terminal.sep.assert_called_once_with("_", exp_msg, yellow=True, bold=True)
+        sherlock.terminal.sep.assert_called_once_with(
+            "_", exp_msg, yellow=True, bold=True
+        )
 
     def test_terminal_reset_progress(self, sherlock, prepared_collection):
         mock_session = mock.MagicMock(testscollected=6)
@@ -435,7 +449,9 @@ class TestSherlock(object):
         )
 
     @pytest.mark.parametrize("by", ("name", "nodeid"))
-    def test_pytest_collection_modifyitems_with_option(self, sherlock, items, target_item, by):
+    def test_pytest_collection_modifyitems_with_option(
+        self, sherlock, items, target_item, by
+    ):
         config = mock.MagicMock()
         config.getoption.return_value = True
         config.option.flaky_test = getattr(target_item, by)
@@ -451,7 +467,9 @@ class TestSherlock(object):
         config.getoption.assert_called_once()
 
     @pytest.mark.parametrize("by", ("name", "nodeid"))
-    def test_pytest_collection_modifyitems_without_option(self, sherlock, items, target_item, by):
+    def test_pytest_collection_modifyitems_without_option(
+        self, sherlock, items, target_item, by
+    ):
         config = mock.MagicMock()
         config.getoption.return_value = False
         config.option.flaky_test = getattr(target_item, by)
@@ -499,14 +517,15 @@ class TestSherlock(object):
         assert report == "Try to find coupled tests in [2-3] steps"
 
     @pytest.mark.parametrize(
-        "report_type",
-        ("mock_report_str", "mock_report_class", "mock_report_crash")
+        "report_type", ("mock_report_str", "mock_report_class", "mock_report_crash")
     )
     def test_patch_report_with_different_longrepr_type(
         self, request, sherlock_with_failures, mock_coupled, report_type
     ):
         report = request.getfixturevalue(report_type)
-        assert sherlock_with_failures.patch_report(failed_report=report, coupled=mock_coupled)
+        assert sherlock_with_failures.patch_report(
+            failed_report=report, coupled=mock_coupled
+        )
         exp_report_message = (
             "\n"
             "Found coupled tests:\n"
@@ -522,13 +541,17 @@ class TestSherlock(object):
         assert report.longrepr == exp_report_message, "Report message wasn't changed"
         assert sherlock_with_failures.reporter.stats["failed"] == [report]
 
-    def test_patch_report_with_xml(self, sherlock_with_failures, mock_coupled, mock_report_str):
+    def test_patch_report_with_xml(
+        self, sherlock_with_failures, mock_coupled, mock_report_str
+    ):
         node_reporters = [
             mock.MagicMock(spec=_NodeReporter),
             mock.MagicMock(spec=_NodeReporter),
             mock.MagicMock(spec=_NodeReporter),
         ]
-        mock_xml = mock.MagicMock(node_reporters_ordered=node_reporters, stats={"failure": 4})
+        mock_xml = mock.MagicMock(
+            node_reporters_ordered=node_reporters, stats={"failure": 4}
+        )
         sherlock_with_failures.config._xml = mock_xml
         assert sherlock_with_failures.patch_report(
             failed_report=mock_report_str, coupled=mock_coupled

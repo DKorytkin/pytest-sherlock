@@ -1,5 +1,6 @@
 from setuptools import setup, find_packages
 
+VERSION_FILE = "pytest_sherlock/_version.py"
 
 with open("README.md", "r") as f:
     long_description = f.read()
@@ -7,7 +8,11 @@ with open("README.md", "r") as f:
 
 setup(
     name="pytest-sherlock",
-    version="0.2.2",
+    use_scm_version={
+        "write_to": VERSION_FILE,
+        "local_scheme": "dirty-tag",
+    },
+    setup_requires=["setuptools_scm==5.0.2"],
     author="Denis Korytkin",
     author_email="dkorytkin@gmail.com",
     description="pytest plugin help to find coupled tests",

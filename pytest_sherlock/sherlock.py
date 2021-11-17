@@ -315,7 +315,7 @@ class Sherlock(object):
         :param List[_pytest.python.Function] items: list of item objects
         """
         if config.getoption("--flaky-test"):
-            self.collection = Collection(items[:])
+            self.collection = Collection(items)
             self.collection.prepare(config.option.flaky_test)
             items[:] = [self.collection.test_func]
         yield

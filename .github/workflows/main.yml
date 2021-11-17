@@ -22,7 +22,7 @@ jobs:
         run: black . --check --diff
 
       - name: Pylint
-        run: pylint --py3k pytest-sherlock
+        run: pylint --py3k pytest_sherlock
 
       - name: Isort
         run: isort . --check

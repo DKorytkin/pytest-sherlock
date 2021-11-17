@@ -275,7 +275,7 @@ class Sherlock(object):
         self.reporter._progress_nodeids_reported = set()
         self.reporter._session.testscollected = len(collection) + 1  # current item
 
-    @pytest.hookimpl(hookwrapper=True)
+    @pytest.hookimpl(hookwrapper=True, trylast=True)
     def pytest_collection_modifyitems(self, session, config, items):
         r"""
         called after collection has been performed, may filter or re-order
@@ -315,7 +315,7 @@ class Sherlock(object):
         :param List[_pytest.python.Function] items: list of item objects
         """
         if config.getoption("--flaky-test"):
-            self.collection = Collection(items)
+            self.collection = Collection(items[:])
             self.collection.prepare(config.option.flaky_test)
             items[:] = [self.collection.test_func]
         yield

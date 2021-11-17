@@ -9,8 +9,8 @@ pytest-cov==2.5.1
 codecov==2.0.16
 coverage==5.0.3
 
-black
-isort
+# black
+# isort
 pylint==2.7.4
 twine>=1.15.0
 wheel>=0.34.2

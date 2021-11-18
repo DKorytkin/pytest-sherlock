@@ -1,0 +1,90 @@
+name: CI
+
+on: [push]
+
+jobs:
+  Linters:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.7
+
+      - name: Install Dependencies
+        run: |
+          pip install -r requirements-dev.txt
+          pip install isort black pylint==2.7.4
+
+      - name: Black
+        run: black . --check --diff
+
+      - name: Pylint
+        run: pylint --py3k pytest_sherlock
+
+      - name: Isort
+        run: isort . --check
+
+  Tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [ 2.7, 3.6, 3.7, 3.8 ]
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Setup Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install Dependencies
+      run: |
+        pip install -r requirements-dev.txt
+        pip install -e .
+
+    - name: Testing
+      run: pytest -lvv tests/ --ignore="tests/exmaple" --junitxml ./results.xml --cov-report xml --cov=pytest_sherlock
+
+  Tests-with-latest-pytest:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.7
+
+      - name: Install Dependencies
+        run: |
+          pip install -r requirements-dev.txt
+          pip install -U pytest
+          pip install -e .
+
+      - name: Testing
+        run: pytest -lvv tests/ --ignore="tests/exmaple" --junitxml ./results.xml --cov-report xml --cov=pytest_sherlock
+
+  Tests-with-master-pytest:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.7
+
+      - name: Install Dependencies
+        run: |
+          pip install -r requirements-dev.txt
+          pip install -U git+https://github.com/pytest-dev/pytest.git
+          pip install -e .
+
+      - name: Testing
+        run: pytest -lvv tests/ --ignore="tests/exmaple" --junitxml ./results.xml --cov-report xml --cov=pytest_sherlock

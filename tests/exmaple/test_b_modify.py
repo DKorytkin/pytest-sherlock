@@ -16,4 +16,3 @@ def test_do_not_modified():
 
 def test_flaky():
     assert random.choice([True, False])
-

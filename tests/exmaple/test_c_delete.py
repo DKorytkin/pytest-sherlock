@@ -1,5 +1,3 @@
-
-
 def test_deleted_passed():
     assert True
 

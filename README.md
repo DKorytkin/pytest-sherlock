@@ -1,6 +1,6 @@
 # pytest-sherlock
 
-[![Build Status](https://github.com/github/docs/actions/workflows/main.yml/badge.svg?branch=master)](https://github.com/DKorytkin/pytest-sherlock/actions/workflows/main.yml?query=branch%3Amaster)
+[![Build Status](https://github.com/DKorytkin/pytest-sherlock/actions/workflows/main.yml/badge.svg?branch=master)](https://github.com/DKorytkin/pytest-sherlock/actions/workflows/main.yml?query=branch%3Amaster)
 [![Cov](https://codecov.io/gh/DKorytkin/pytest-sherlock/branch/master/graph/badge.svg)](https://codecov.io/gh/DKorytkin/pytest-sherlock/branch/master)
 [![PyPI](https://img.shields.io/pypi/v/pytest-sherlock)](https://pypi.org/project/pytest-sherlock/)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/pytest-sherlock)](https://pypi.org/project/pytest-sherlock/)

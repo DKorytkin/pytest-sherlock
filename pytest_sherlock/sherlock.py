@@ -15,15 +15,19 @@ class SherlockError(Exception):
 
 
 class SherlockNotFoundError(SherlockError):
-    def __init__(self, test_name):
+    def __init__(self, test_name, target_tests=None):
         self.test_name = test_name
+        self.target_tests = target_tests
         super(SherlockNotFoundError, self).__init__()
 
     def __str__(self):
-        return (
+        msg = (
             "Test not found: {}. "
             "Please validate your test name (ex: 'tests/unit/test_one.py::test_first')"
         ).format(self.test_name)
+        if self.target_tests:
+            msg += "\nFound similar test names: {}".format(self.target_tests)
+        return msg
 
 
 def _remove_cached_results_from_failed_fixtures(item):
@@ -135,13 +139,20 @@ class Collection(object):
     def _needed_tests(self, test_name):
         tests = []
         for test_func in self.items:
-            if test_func.name == test_name or test_func.nodeid == test_name:
+            if test_name in (test_func.name, test_func.nodeid):
                 self.test_func = test_func
                 break
             tests.append(test_func)
 
         if self.test_func is None:
-            raise SherlockNotFoundError(test_name)
+            if ".py::" in test_name:
+                target_test_name = test_name.split("::")[-1]
+            else:
+                target_test_name = test_name.split("[")[0]
+            target_test_names = [
+                i.nodeid for i in self.items if target_test_name in i.name
+            ]
+            raise SherlockNotFoundError(test_name, target_tests=target_test_names)
 
         self.items[:] = sorted(
             tests,
@@ -314,7 +325,7 @@ class Sherlock(object):
         """
         if config.getoption("--flaky-test"):
             self.collection = Collection(items)
-            self.collection.prepare(config.option.flaky_test)
+            self.collection.prepare(config.option.flaky_test.strip())
             items[:] = [self.collection.test_func]
         yield
 
@@ -430,7 +441,7 @@ class Sherlock(object):
                     failed_report = report
                     continue
                 logger(report=report)
-        return failed_report  # setup, call, teardown must success
+        return failed_report  # setup, call, teardown must be succeeded
 
     def call(self, target_item, items):
         """

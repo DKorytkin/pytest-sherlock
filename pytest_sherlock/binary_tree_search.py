@@ -98,9 +98,8 @@ def draw_tree(node):
             left += [l_width * " "] * (r_height - l_height)
         elif r_height < l_height:
             right += [r_width * " "] * (l_height - r_height)
-        zipped_lines = zip(left, right)
         lines = [first_line, second_line] + [
-            a + line_width * " " + b for a, b in zipped_lines
+            a + line_width * " " + b for a, b in zip(left, right)
         ]
         return (
             lines,
@@ -110,8 +109,7 @@ def draw_tree(node):
         )
 
     all_lines, _, _, _ = _count_lines(node)
-    for line in all_lines:
-        print(line)
+    print("\n".join(all_lines))
 
 
 def make_tee(items):

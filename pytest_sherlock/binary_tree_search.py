@@ -38,6 +38,27 @@ class Node(object):
 
 
 def draw_tree(node):
+    r"""
+    The function draws schema of binary tree
+
+    >>> tree = make_tee((0, 7))
+    >>> draw_tree(tree)
+              ____________________(0, 7)_____________________
+             /                                               \
+        __(0, 3)_________                         ________(3, 7)_________
+       /                 \                       /                       \
+    (0, 1)          __(1, 3)___             __(3, 5)___             __(5, 7)___
+                   /           \           /           \           /           \
+                (1, 2)      (2, 3)      (3, 4)      (4, 5)      (5, 6)      (6, 7)
+
+    Parameters
+    ----------
+    node: Node
+
+    Returns
+    -------
+    None
+    """
     def _left_shift_lines(lines, width):
         return [line + width * " " for line in lines]
 

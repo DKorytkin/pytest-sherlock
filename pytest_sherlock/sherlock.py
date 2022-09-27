@@ -7,27 +7,23 @@ import six
 from _pytest.junitxml import _NodeReporter
 from _pytest.runner import TestReport, runtestprotocol
 
-from pytest_sherlock.binary_tree_search import Root as BTSRoot
+from pytest_sherlock.binary_tree_search import length, make_tee
 
 
 class SherlockError(Exception):
     pass
 
 
-class SherlockNotFoundError(SherlockError):
-    def __init__(self, test_name, target_tests=None):
-        self.test_name = test_name
-        self.target_tests = target_tests
-        super(SherlockNotFoundError, self).__init__()
-
-    def __str__(self):
+class NotFoundError(SherlockError):
+    @classmethod
+    def make(cls, test_name, target_tests=None):
         msg = (
             "Test not found: {}. "
             "Please validate your test name (ex: 'tests/unit/test_one.py::test_first')"
-        ).format(self.test_name)
-        if self.target_tests:
-            msg += "\nFound similar test names: {}".format(self.target_tests)
-        return msg
+        ).format(test_name)
+        if target_tests:
+            msg += "\nFound similar test names: {}".format(target_tests)
+        return cls(msg)
 
 
 def _remove_cached_results_from_failed_fixtures(item):
@@ -129,43 +125,15 @@ class Bucket(object):
 
 
 class Collection(object):
-    def __init__(self, items):
+    def __init__(self, items, test_func=None):
         self.items = items
-        self.test_func = None
+        self.test_func = test_func
         self.last = None
-        self.current_root = None
-        self.bts = BTSRoot()
-
-    def _needed_tests(self, test_name):
-        tests = []
-        for test_func in self.items:
-            if test_name in (test_func.name, test_func.nodeid):
-                self.test_func = test_func
-                break
-            tests.append(test_func)
-
-        if self.test_func is None:
-            if ".py::" in test_name:
-                target_test_name = test_name.split("::")[-1]
-            else:
-                target_test_name = test_name.split("[")[0]
-            target_test_names = [
-                i.nodeid for i in self.items if target_test_name in i.name
-            ]
-            raise SherlockNotFoundError(test_name, target_tests=target_test_names)
-
-        self.items[:] = sorted(
-            tests,
-            key=lambda item: (
-                len(set(item.fixturenames) & set(self.test_func.fixturenames)),
-                item.parent.nodeid,  # TODO add AST analise
-            ),
-            reverse=True,
-        )
-        return self.items
+        self.bts = make_tee((0, len(items)))
+        self.current_root = self.bts
 
     def __len__(self):
-        return len(self.bts)
+        return length(self.bts)
 
     def __iter__(self):
         return self
@@ -174,10 +142,8 @@ class Collection(object):
         if self.last is not None:
             has_report = bool(self.last.failed_report)
             self.update_root_by_status(status=has_report)
-            self.last = self._get_current_tests()
-        else:
-            self.last = self._get_current_tests()
 
+        self.last = self._get_current_tests()
         if self.last is not None:
             return self.last
 
@@ -186,10 +152,33 @@ class Collection(object):
 
     next = __next__
 
-    def prepare(self, test_name):
-        items = self._needed_tests(test_name)
-        self.bts.insert(items)
-        self.refresh_state()
+    @staticmethod
+    def find_target_test(items, test_name):
+
+        for idx, test_func in enumerate(items):
+            if test_name in (test_func.name, test_func.nodeid):
+                return idx, test_func
+
+        if ".py::" in test_name:
+            target_test_name = test_name.split("::")[-1]
+        else:
+            target_test_name = test_name.split("[")[0]
+        target_test_names = [i.nodeid for i in items if target_test_name in i.name]
+        raise NotFoundError.make(test_name, target_tests=target_test_names)
+
+    @classmethod
+    def make(cls, items, test_name):
+        idx, target_test_method = cls.find_target_test(items, test_name)
+        target_items = sorted(
+            items[:idx],
+            key=lambda item: (
+                len(set(item.fixturenames) & set(target_test_method.fixturenames)),
+                item.parent.nodeid,  # TODO can we do AST or Name or Content analysis?
+            ),
+            reverse=True,
+        )
+        collection = cls(items=target_items, test_func=target_test_method)
+        return collection
 
     def update_root_by_status(self, status):
         if status is False:
@@ -209,22 +198,33 @@ class Collection(object):
             return None
 
         if self.current_root.left is not None:
-            return Bucket(self.current_root.left.items)
+            return self.make_bucket(self.current_root.left)
         if self.current_root.right is not None:
-            return Bucket(self.current_root.right.items)
+            return self.make_bucket(self.current_root.right)
 
-        # the last tests (should be just one test) which should be check
-        return Bucket(self.current_root.items)
+        # the last tests (should be just one test) which should be checked
+        return self.make_bucket(self.current_root)
+
+    def make_bucket(self, node):
+        start, end = node.items
+        items = self.items[start:end]
+        return Bucket(items)
 
     def refresh_state(self):
-        self.current_root = self.bts.root
+        self.current_root = self.bts
         self.last = None
+
+
+@contextlib.contextmanager
+def log(item):
+    item.ihook.pytest_runtest_logstart(nodeid=item.nodeid, location=item.location)
+    yield item.ihook.pytest_runtest_logreport
+    item.ihook.pytest_runtest_logfinish(nodeid=item.nodeid, location=item.location)
 
 
 class Sherlock(object):
     def __init__(self, config):
         self.config = config
-        # TODO add tests
         self.collection = None
         self._tw = None
         self._reporter = None
@@ -256,12 +256,6 @@ class Sherlock(object):
         message = "Step [{} of {}]:".format(step, maximum)
         self.terminal.sep("_", message, yellow=True, bold=True)
 
-    @contextlib.contextmanager
-    def log(self, item):
-        item.ihook.pytest_runtest_logstart(nodeid=item.nodeid, location=item.location)
-        yield item.ihook.pytest_runtest_logreport
-        item.ihook.pytest_runtest_logfinish(nodeid=item.nodeid, location=item.location)
-
     def reset_progress(self, collection):
         """
         Patch progress for each step
@@ -281,8 +275,10 @@ class Sherlock(object):
 
         :param Bucket[_pytest.python.Function] collection: bucket of tests
         """
-        self.reporter._progress_nodeids_reported = set()
-        self.reporter._session.testscollected = len(collection) + 1  # current item
+        setattr(self.reporter, "_progress_nodeids_reported", set())
+        setattr(
+            self.reporter._session, "testscollected", len(collection) + 1
+        )  # current item
 
     @pytest.hookimpl(hookwrapper=True, trylast=True)
     def pytest_collection_modifyitems(self, session, config, items):
@@ -324,8 +320,7 @@ class Sherlock(object):
         :param List[_pytest.python.Function] items: list of item objects
         """
         if config.getoption("--flaky-test"):
-            self.collection = Collection(items)
-            self.collection.prepare(config.option.flaky_test.strip())
+            self.collection = Collection.make(items, config.option.flaky_test.strip())
             items[:] = [self.collection.test_func]
         yield
 
@@ -337,8 +332,9 @@ class Sherlock(object):
         :param py._path.local.LocalPath startdir:
         :param List[_pytest.python.Function] items: contain just target test
         """
-        length = len(self.collection)
-        return "Try to find coupled tests in [{}-{}] steps".format(length, length + 1)
+        max_steps = length(self.collection.bts, max)
+        min_steps = length(self.collection.bts, min)
+        return "Try to find coupled tests in [{}-{}] steps".format(min_steps, max_steps)
 
     def patch_report(self, failed_report, coupled):
         """
@@ -375,7 +371,7 @@ class Sherlock(object):
         :param _pytest.python.Function item: target test
         :param _pytest.python.Function | None nextitem: by default None
         """
-        max_length = len(self.collection) + 1  # target test
+        max_length = len(self.collection)
         for step, bucket in enumerate(self.collection, start=1):
             self.write_step(step, max_length)
             self.call(target_item=item, items=bucket)
@@ -417,7 +413,7 @@ class Sherlock(object):
         :param Bucket[_pytest.python.Function] items: bucket of tests
         """
         for next_idx, test_func in enumerate(items, 1):
-            with self.log(test_func) as logger:
+            with log(test_func) as logger:
                 next_item = items[next_idx] if next_idx < len(items) else target_item
                 reports = runtestprotocol(item=test_func, nextitem=next_item, log=False)
                 for report in reports:  # 3 reports: setup, call, teardown
@@ -432,7 +428,7 @@ class Sherlock(object):
         :param _pytest.python.Function target_item: current flaky test
         """
         failed_report = None
-        with self.log(target_item) as logger:
+        with log(target_item) as logger:
             reports = runtestprotocol(target_item, log=False)
             for report in reports:  # 3 reports: setup, call, teardown
                 if report.failed is True:

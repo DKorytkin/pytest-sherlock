@@ -138,3 +138,17 @@ def test_count_length(data, func, exp_result):
 
     """
     assert length(make_tee(data), func) == exp_result
+
+
+def test_draw_tree(capsys):
+    exp_result = (
+        "          ________(0, 5)_________                     \n"
+        "         /                       \\                    \n"
+        "    __(0, 2)___             __(2, 5)_________         \n"
+        "   /           \\           /                 \\        \n"
+        "(0, 1)      (1, 2)      (2, 3)          __(3, 5)___   \n"
+        "                                       /           \\  \n"
+        "                                    (3, 4)      (4, 5)\n"
+    )
+    draw_tree(make_tee((0, 5)))
+    assert capsys.readouterr().out == exp_result

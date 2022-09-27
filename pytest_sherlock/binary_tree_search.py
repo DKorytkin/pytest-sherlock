@@ -38,26 +38,69 @@ class Node(object):
 
 
 def draw_tree(node):
+    def _left_shift_lines(lines, width):
+        return [line + width * " " for line in lines]
+
+    def _right_shift_lines(lines, width):
+        return [width * " " + line for line in lines]
+
+    def _build_left_line(middle, width):
+        # '       ______'
+        template = "{0:>{space_width}}{0:_>{current_value_width}}"
+        return template.format(
+            "", space_width=middle + 1, line_width=width - middle - 1
+        )
+
+    def _build_right_line(middle, width):
+        # '______       '
+        template = "{0:_>{current_value_width}}{0:>{space_width}}"
+        return template.format(
+            "", space_width=width - middle, line_width=middle
+        )
+
+    def _build_left_arrows(middle, width):
+        # '      /      '
+        template = "{0:>{left_width}}/{0:<{right_width}}"
+        return template.format(
+            "", left_width=middle, right_width=width - middle - 1
+        )
+
+    def _build_right_arrows(middle, width):
+        # '      \      '
+        template = "{0:>{left_width}}\\{0:<{right_width}}"
+        return template.format(
+            "", left_width=middle, right_width=width - middle - 1
+        )
+
     def _count_lines(current_node):
-        """Returns list of strings, width, height, and horizontal coordinate of the root."""
-        line = str(current_node)
-        line_width = len(line)
-        line_middle = line_width // 2
+        """
+        Parameters
+        ----------
+        current_node: Node
+
+        Returns
+        -------
+        tuple[list[str], int, int, int]
+            list of strings, width, height, middle
+        """
+        current_value = str(current_node)
+        current_value_width = len(current_value)
+        line_middle = current_value_width // 2
         line_height = 1
 
         # No child.
         if current_node.right is None and current_node.left is None:
-            return [line], line_width, line_height, line_middle
+            return [current_value], current_value_width, line_height, line_middle
 
         # Only left child.
         if current_node.right is None:
             lines, width, height, middle = _count_lines(current_node.left)
-            first_line = (middle + 1) * " " + (width - middle - 1) * "_" + line
-            second_line = middle * " " + "/" + (width - middle - 1 + line_width) * " "
-            shifted_lines = [line + line_width * " " for line in lines]
+            value_line = _build_left_line(middle, width) + current_value
+            arrows_line = _build_left_arrows(middle, width)
+            previous_lines = _left_shift_lines(lines, current_value_width)
             return (
-                [first_line, second_line] + shifted_lines,
-                width + line_width,
+                [value_line, arrows_line] + previous_lines,
+                width + current_value_width,
                 height + 2,
                 width + line_middle,
             )
@@ -65,14 +108,12 @@ def draw_tree(node):
         # Only right child.
         if current_node.left is None:
             lines, width, height, middle = _count_lines(current_node.right)
-            first_line = line + middle * "_" + (width - middle) * " "
-            second_line = (
-                (line_width + middle) * " " + "\\" + (width - middle - 1) * " "
-            )
-            shifted_lines = [line_width * " " + line for line in lines]
+            value_line = current_value + _build_right_line(middle, width)
+            arrows_line = _build_right_arrows(middle, width)
+            previous_lines = _right_shift_lines(lines, current_value_width)
             return (
-                [first_line, second_line] + shifted_lines,
-                width + line_width,
+                [value_line, arrows_line] + previous_lines,
+                width + current_value_width,
                 height + 2,
                 line_middle,
             )
@@ -80,32 +121,27 @@ def draw_tree(node):
         # Two children.
         left, l_width, l_height, l_middle = _count_lines(current_node.left)
         right, r_width, r_height, r_middle = _count_lines(current_node.right)
-        first_line = (
-            (l_middle + 1) * " "
-            + (l_width - l_middle - 1) * "_"
-            + line
-            + r_middle * "_"
-            + (r_width - r_middle) * " "
+        value_line = (
+            _build_left_line(l_middle, l_width)
+            + current_value
+            + _build_right_line(r_middle, r_width)
         )
-        second_line = (
-            l_middle * " "
-            + "/"
-            + (l_width - l_middle - 1 + line_width + r_middle) * " "
-            + "\\"
-            + (r_width - r_middle - 1) * " "
+
+        arrows_line = (
+            _build_left_arrows(l_middle, l_width)
+            + current_value_width * " "
+            + _build_right_arrows(r_middle, r_width)
         )
         if l_height < r_height:
             left += [l_width * " "] * (r_height - l_height)
         elif r_height < l_height:
             right += [r_width * " "] * (l_height - r_height)
-        lines = [first_line, second_line] + [
-            a + line_width * " " + b for a, b in zip(left, right)
-        ]
+        previous_lines = [a + current_value_width * " " + b for a, b in zip(left, right)]
         return (
-            lines,
-            l_width + r_width + line_width,
+            [value_line, arrows_line] + previous_lines,
+            l_width + r_width + current_value_width,
             max(l_height, r_height) + 2,
-            l_width + line_width // 2,
+            l_width + current_value_width // 2,
         )
 
     all_lines, _, _, _ = _count_lines(node)

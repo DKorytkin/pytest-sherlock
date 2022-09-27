@@ -59,6 +59,7 @@ def draw_tree(node):
     -------
     None
     """
+
     def _left_shift_lines(lines, width):
         return [line + width * " " for line in lines]
 
@@ -67,31 +68,25 @@ def draw_tree(node):
 
     def _build_left_line(middle, width):
         # '       ______'
-        template = "{0:>{space_width}}{0:_>{current_value_width}}"
+        template = "{0:>{space_width}}{0:_>{line_width}}"
         return template.format(
             "", space_width=middle + 1, line_width=width - middle - 1
         )
 
     def _build_right_line(middle, width):
         # '______       '
-        template = "{0:_>{current_value_width}}{0:>{space_width}}"
-        return template.format(
-            "", space_width=width - middle, line_width=middle
-        )
+        template = "{0:_>{line_width}}{0:>{space_width}}"
+        return template.format("", space_width=width - middle, line_width=middle)
 
     def _build_left_arrows(middle, width):
         # '      /      '
         template = "{0:>{left_width}}/{0:<{right_width}}"
-        return template.format(
-            "", left_width=middle, right_width=width - middle - 1
-        )
+        return template.format("", left_width=middle, right_width=width - middle - 1)
 
     def _build_right_arrows(middle, width):
         # '      \      '
         template = "{0:>{left_width}}\\{0:<{right_width}}"
-        return template.format(
-            "", left_width=middle, right_width=width - middle - 1
-        )
+        return template.format("", left_width=middle, right_width=width - middle - 1)
 
     def _count_lines(current_node):
         """
@@ -157,7 +152,9 @@ def draw_tree(node):
             left += [l_width * " "] * (r_height - l_height)
         elif r_height < l_height:
             right += [r_width * " "] * (l_height - r_height)
-        previous_lines = [a + current_value_width * " " + b for a, b in zip(left, right)]
+        previous_lines = [
+            a + current_value_width * " " + b for a, b in zip(left, right)
+        ]
         return (
             [value_line, arrows_line] + previous_lines,
             l_width + r_width + current_value_width,

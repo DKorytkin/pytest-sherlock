@@ -88,7 +88,7 @@ def find_target_test(items, test_name):
     raise NotFoundError.make(test_name, target_tests=target_test_names)
 
 
-def make_collection(*items, binary_tree=None):
+def make_collection(items, binary_tree=None):
     root = binary_tree or make_tee((0, len(items)))
     current_node = root
     while current_node is not None:
@@ -230,7 +230,7 @@ class Sherlock(object):
             binary_tree = make_tee((0, len(target_items)))
             self._min_iterations = length(binary_tree, min)
             self._max_iterations = length(binary_tree, max)
-            self.collection = make_collection(*target_items, binary_tree=binary_tree)
+            self.collection = make_collection(target_items, binary_tree=binary_tree)
         yield
 
     @pytest.hookimpl(trylast=True)

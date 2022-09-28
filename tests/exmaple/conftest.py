@@ -15,7 +15,7 @@ def config():
     """
     file_path = os.path.join(EXAMPLE_ROOT, "data/data.json")
     with open(file_path, "r") as f:
-        yield json.load(f)
+        return json.load(f)
 
 
 @pytest.fixture(scope="session")

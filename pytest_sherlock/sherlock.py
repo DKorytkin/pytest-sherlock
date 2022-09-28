@@ -74,145 +74,41 @@ def write_coupled_report(coupled_tests):
     return msg
 
 
-class Bucket(object):
+def find_target_test(items, test_name):
 
-    report_valid_types = (TestReport, type(None))
+    for idx, test_func in enumerate(items):
+        if test_name in (test_func.name, test_func.nodeid):
+            return idx, test_func
 
-    def __init__(self, items):
-        self.items = items
-        self._failed_report = None
-        self.__current = 0
-
-    def __len__(self):
-        return len(self.items)
-
-    def __iter__(self):
-        return self
-
-    def __getitem__(self, item):
-        return self.items[item]
-
-    def __repr__(self):
-        return str(self.items)
-
-    def __str__(self):
-        return "<Bucket items={}>".format(len(self.items))
-
-    def __next__(self):
-        if self.__current < len(self.items):
-            item = self.items[self.__current]
-            self.__current += 1
-            return item
-
-        self.__current = 0
-        raise StopIteration
-
-    next = __next__
-
-    @property
-    def failed_report(self):
-        return self._failed_report
-
-    @failed_report.setter
-    def failed_report(self, value):
-        if not isinstance(value, self.report_valid_types):
-            raise SherlockError(
-                "Not valid type of report {}, should be one of {}".format(
-                    type(value), self.report_valid_types
-                )
-            )
-        self._failed_report = value
+    if ".py::" in test_name:
+        target_test_name = test_name.split("::")[-1]
+    else:
+        target_test_name = test_name.split("[")[0]
+    target_test_names = [i.nodeid for i in items if target_test_name in i.name]
+    raise NotFoundError.make(test_name, target_tests=target_test_names)
 
 
-class Collection(object):
-    def __init__(self, items, test_func=None):
-        self.items = items
-        self.test_func = test_func
-        self.last = None
-        self.bts = make_tee((0, len(items)))
-        self.current_root = self.bts
-
-    def __len__(self):
-        return length(self.bts)
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        if self.last is not None:
-            has_report = bool(self.last.failed_report)
-            self.update_root_by_status(status=has_report)
-
-        self.last = self._get_current_tests()
-        if self.last is not None:
-            return self.last
-
-        self.refresh_state()
-        raise StopIteration
-
-    next = __next__
-
-    @staticmethod
-    def find_target_test(items, test_name):
-
-        for idx, test_func in enumerate(items):
-            if test_name in (test_func.name, test_func.nodeid):
-                return idx, test_func
-
-        if ".py::" in test_name:
-            target_test_name = test_name.split("::")[-1]
+def make_collection(items, binary_tree=None):
+    root = binary_tree or make_tee((0, len(items)))
+    current_node = root
+    while current_node is not None:
+        if current_node.left is not None:
+            range_of_tests = slice(*current_node.left.items)
+        elif current_node.right is not None:
+            range_of_tests = slice(*current_node.right.items)
         else:
-            target_test_name = test_name.split("[")[0]
-        target_test_names = [i.nodeid for i in items if target_test_name in i.name]
-        raise NotFoundError.make(test_name, target_tests=target_test_names)
+            range_of_tests = slice(*current_node.items)
 
-    @classmethod
-    def make(cls, items, test_name):
-        idx, target_test_method = cls.find_target_test(items, test_name)
-        target_items = sorted(
-            items[:idx],
-            key=lambda item: (
-                len(set(item.fixturenames) & set(target_test_method.fixturenames)),
-                item.parent.nodeid,  # TODO can we do AST or Name or Content analysis?
-            ),
-            reverse=True,
-        )
-        collection = cls(items=target_items, test_func=target_test_method)
-        return collection
+        bucket = items[range_of_tests]
+        has_report = yield bucket
 
-    def update_root_by_status(self, status):
-        if status is False:
-            self.current_root = self.current_root.right
+        if has_report and len(bucket) == 1:  # found coupled tests
             return
 
-        if self.last and len(self.last) == 1:
-            # The last bucked has just one test and target tests failed after it
-            # Found coupled tests
-            self.current_root = None
-            return
-
-        self.current_root = self.current_root.left
-
-    def _get_current_tests(self):
-        if self.current_root is None:
-            return None
-
-        if self.current_root.left is not None:
-            return self.make_bucket(self.current_root.left)
-        if self.current_root.right is not None:
-            return self.make_bucket(self.current_root.right)
-
-        # the last tests (should be just one test) which should be checked
-        return self.make_bucket(self.current_root)
-
-    def make_bucket(self, node):
-        start, end = node.items
-        items = self.items[start:end]
-        return Bucket(items)
-
-    def refresh_state(self):
-        self.current_root = self.bts
-        self.last = None
+        if has_report:
+            current_node = current_node.left  # dive dipper if report was made
+        else:
+            current_node = current_node.right
 
 
 @contextlib.contextmanager
@@ -225,22 +121,14 @@ def log(item):
 class Sherlock(object):
     def __init__(self, config):
         self.config = config
+        # initialize via pytest_sessionstart
+        self.reporter = None
+        self.session = None
+        # initialize via pytest_collection_modifyitems
         self.collection = None
-        self._tw = None
-        self._reporter = None
-        self._coupled = None
-
-    @property
-    def reporter(self):
-        if self._reporter is None:
-            self._reporter = self.config.pluginmanager.get_plugin("terminalreporter")
-        return self._reporter
-
-    @property
-    def terminal(self):
-        if self._tw is None:
-            self._tw = self.reporter.writer
-        return self._tw
+        self.target_test_method = None
+        self._min_iterations = 0
+        self._max_iterations = 0
 
     def write_step(self, step, maximum):
         """
@@ -254,7 +142,14 @@ class Sherlock(object):
         """
         self.reporter.ensure_newline()
         message = "Step [{} of {}]:".format(step, maximum)
-        self.terminal.sep("_", message, yellow=True, bold=True)
+        self.reporter.writer.sep("_", message, yellow=True, bold=True)
+
+    @pytest.hookimpl(hookwrapper=True, trylast=True)
+    def pytest_sessionstart(self, session):
+        self.session = session
+        if self.reporter is None:
+            self.reporter = self.config.pluginmanager.get_plugin("terminalreporter")
+        yield
 
     def reset_progress(self, collection):
         """
@@ -276,9 +171,7 @@ class Sherlock(object):
         :param Bucket[_pytest.python.Function] collection: bucket of tests
         """
         setattr(self.reporter, "_progress_nodeids_reported", set())
-        setattr(
-            self.reporter._session, "testscollected", len(collection) + 1
-        )  # current item
+        setattr(self.session, "testscollected", len(collection) + 1)  # current item
 
     @pytest.hookimpl(hookwrapper=True, trylast=True)
     def pytest_collection_modifyitems(self, session, config, items):
@@ -320,8 +213,23 @@ class Sherlock(object):
         :param List[_pytest.python.Function] items: list of item objects
         """
         if config.getoption("--flaky-test"):
-            self.collection = Collection.make(items, config.option.flaky_test.strip())
-            items[:] = [self.collection.test_func]
+            idx, target_test_method = find_target_test(
+                items, config.option.flaky_test.strip()
+            )
+            target_items = sorted(
+                items[:idx],
+                key=lambda item: (
+                    len(set(item.fixturenames) & set(target_test_method.fixturenames)),
+                    item.parent.nodeid,  # TODO can we do AST or Name or Content analysis?
+                ),
+                reverse=True,
+            )
+            items[:] = [target_test_method]
+            self.target_test_method = target_test_method
+            binary_tree = make_tee((0, len(target_items)))
+            self._min_iterations = length(binary_tree, min)
+            self._max_iterations = length(binary_tree, max)
+            self.collection = make_collection(target_items, binary_tree=binary_tree)
         yield
 
     @pytest.hookimpl(trylast=True)
@@ -332,9 +240,9 @@ class Sherlock(object):
         :param py._path.local.LocalPath startdir:
         :param List[_pytest.python.Function] items: contain just target test
         """
-        max_steps = length(self.collection.bts, max)
-        min_steps = length(self.collection.bts, min)
-        return "Try to find coupled tests in [{}-{}] steps".format(min_steps, max_steps)
+        return "Try to find coupled tests in [{}-{}] steps".format(
+            self._min_iterations, self._max_iterations
+        )
 
     def patch_report(self, failed_report, coupled):
         """
@@ -371,13 +279,48 @@ class Sherlock(object):
         :param _pytest.python.Function item: target test
         :param _pytest.python.Function | None nextitem: by default None
         """
-        max_length = len(self.collection)
-        for step, bucket in enumerate(self.collection, start=1):
-            self.write_step(step, max_length)
-            self.call(target_item=item, items=bucket)
-            if len(bucket) == 1 and bucket.failed_report:
-                self.patch_report(bucket.failed_report, coupled=[bucket[0], item])
+        step = 1
+        items = next(self.collection)
+        while items:
+            self.write_step(step, self._max_iterations)
+            self.reset_progress(items)
+
+            # call tests before our "--flaky-test" to make sure they are not coupled
+            for next_idx, test_func in enumerate(items, 1):
+                with log(test_func) as logger:
+                    next_item = items[next_idx] if next_idx < len(items) else item
+                    reports = runtestprotocol(
+                        item=test_func, nextitem=next_item, log=False
+                    )
+                    for report in reports:  # 3 reports: setup, call, teardown
+                        if report.failed is True:
+                            report.outcome = "flaky"
+                        logger(report=report)
+
+            # call to target test for checking is it still green
+            with log(item) as logger:
+                reports = runtestprotocol(item, log=False)
+                failed_report = None
+                for report in reports:  # 3 reports: setup, call, teardown
+                    if report.failed is True:
+                        refresh_state(item=item)
+                        logger(report=report)
+                        failed_report = report
+                        continue
+                    logger(report=report)
+
+            if len(items) == 1 and failed_report:
+                self.patch_report(failed_report, coupled=[items[0], item])
                 break
+
+            try:
+                items = self.collection.send(bool(failed_report))
+            except StopIteration:
+                if len(items) != 1:
+                    raise  # something going wrong
+                break  # didn't find any coupled tests
+
+            step += 1
 
     def pytest_runtestloop(self, session):
         """
@@ -398,53 +341,10 @@ class Sherlock(object):
 
         for i, item in enumerate(session.items):
             nextitem = session.items[i + 1] if i + 1 < len(session.items) else None
+            # TODO move logic here
             is_success = self.pytest_runtest_protocol(item=item, nextitem=nextitem)
             if not is_success:
                 raise session.Failed("Found coupled tests")
             if session.shouldstop:
                 raise session.Interrupted(session.shouldstop)
         return True
-
-    def call_items(self, target_item, items):
-        """
-        Call all items before target test
-        and if one of result (setup, call, teardown) failed mark as flaky
-        :param _pytest.python.Function target_item: test which should fail
-        :param Bucket[_pytest.python.Function] items: bucket of tests
-        """
-        for next_idx, test_func in enumerate(items, 1):
-            with log(test_func) as logger:
-                next_item = items[next_idx] if next_idx < len(items) else target_item
-                reports = runtestprotocol(item=test_func, nextitem=next_item, log=False)
-                for report in reports:  # 3 reports: setup, call, teardown
-                    if report.failed is True:
-                        report.outcome = "flaky"
-                    logger(report=report)
-
-    def call_target(self, target_item):
-        """
-        Call target test after some tests which were run before
-        and if one of result (setup, call, teardown) failed mark as coupled
-        :param _pytest.python.Function target_item: current flaky test
-        """
-        failed_report = None
-        with log(target_item) as logger:
-            reports = runtestprotocol(target_item, log=False)
-            for report in reports:  # 3 reports: setup, call, teardown
-                if report.failed is True:
-                    refresh_state(item=target_item)
-                    logger(report=report)
-                    failed_report = report
-                    continue
-                logger(report=report)
-        return failed_report  # setup, call, teardown must be succeeded
-
-    def call(self, target_item, items):
-        """
-        Call all tests (which probably guilty in failure) before target test
-        :param _pytest.python.Function target_item: current flaky test
-        :param Bucket[_pytest.python.Function] items: bucket of tests
-        """
-        self.reset_progress(items)
-        self.call_items(target_item=target_item, items=items)
-        items.failed_report = self.call_target(target_item=target_item)

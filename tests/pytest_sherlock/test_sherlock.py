@@ -1,3 +1,5 @@
+import argparse
+
 import mock
 import pytest
 from _pytest.config import Config
@@ -5,13 +7,8 @@ from _pytest.junitxml import _NodeReporter
 from _pytest.python import Function
 from _pytest.runner import TestReport as PytestReport
 
-from pytest_sherlock.binary_tree_search import Node
 from pytest_sherlock.sherlock import (
-    Bucket,
-    Collection,
-    NotFoundError,
     Sherlock,
-    SherlockError,
     _remove_cached_results_from_failed_fixtures,
     _remove_failed_setup_state_from_session,
     log,
@@ -61,8 +58,27 @@ def items(target_item):
     return pytest_items
 
 
-@pytest.fixture(scope="function")
-def collection(items, target_item):
+@pytest.fixture
+def session():
+    return mock.MagicMock()
+
+
+@pytest.fixture
+def config(target_item):
+    plugin_manager = mock.MagicMock()
+    option_namespace = argparse.Namespace(flaky_test=target_item.nodeid)
+    return mock.MagicMock(
+        spec=Config, pluginmanager=plugin_manager, option=option_namespace
+    )
+
+
+@pytest.fixture
+def sherlock(config):
+    return Sherlock(config=config)
+
+
+@pytest.fixture
+def sherlock_with_prepared_collection(sherlock, config, session, items, target_item):
     """
     Target tests:
         0, 'tests/test_tree.py::test_tree'
@@ -77,23 +93,9 @@ def collection(items, target_item):
        /           \           /           \
     (0, 1)      (1, 2)      (2, 3)      (3, 4)
     """
-    return Collection.make(items, target_item.nodeid)
-
-
-@pytest.fixture
-def config():
-    plugin_manager = mock.MagicMock()
-    return mock.MagicMock(spec=Config, pluginmanager=plugin_manager)
-
-
-@pytest.fixture
-def sherlock(config):
-    return Sherlock(config=config)
-
-
-@pytest.fixture(scope="function")
-def sherlock_with_prepared_collection(sherlock, collection):
-    sherlock.collection = collection
+    sherlock.config.getoption.return_value = True
+    next(sherlock.pytest_sessionstart(session))
+    next(sherlock.pytest_collection_modifyitems(session, config, items))
     return sherlock
 
 
@@ -189,177 +191,10 @@ class TestCleanupItem(object):
         self.check_cleanup_stack(stack)
 
 
-class TestBucket(object):
-    @pytest.fixture
-    def bucket(self, items):
-        return Bucket(items)
-
-    def test_crete_instance(self, bucket, items):
-        assert bucket.items == items
-        assert bucket.failed_report is None
-        assert bucket._failed_report is None
-
-    def test_valid_failed_report_types(self, bucket):
-        assert bucket.report_valid_types == (PytestReport, type(None))
-
-    def test_as_string(self, bucket):
-        assert str(bucket) == "<Bucket items=6>"
-
-    def test_representation(self, bucket):
-        assert repr(bucket) == str(bucket.items)
-
-    def test_length(self, bucket):
-        assert len(bucket) == 6
-
-    def test_getitem_by_index(self, bucket):
-        assert bucket[4].nodeid == "tests/test_five.py::test_five"
-
-    def test_iteration(self, bucket, items):
-        for idx, item in enumerate(bucket):
-            assert item == items[idx]
-
-    @pytest.mark.parametrize("report", (None, mock.MagicMock(spec=PytestReport)))
-    def test_set_failed_report(self, bucket, report):
-        bucket.failed_report = report
-        assert bucket.failed_report == report
-        assert bucket._failed_report == report
-
-    def test_set_not_valid_failed_report(self, bucket):
-        with pytest.raises(SherlockError, match="Not valid type of report"):
-            bucket.failed_report = mock.MagicMock()
-
-
-class TestCollection(object):
-    def test_create_instance(self, collection, items, target_item):
-        assert collection.items != items, "Tests were not filtered out"
-        assert collection.test_func == target_item
-        assert isinstance(collection.bts, Node)
-        assert isinstance(collection.current_root, Node)
-        assert collection.bts == collection.current_root
-        assert collection.last is None
-
-    def test_collection_length(self, collection):
-        assert len(collection) == 3
-
-    @pytest.mark.parametrize(
-        "report, exp_buckets",
-        (
-            (
-                None,
-                [
-                    [
-                        "tests/test_tree.py::test_tree",
-                        "tests/test_one.py::test_one",
-                    ],  # Step [1 of 3]
-                    ["tests/test_two.py::test_two"],  # Step [2 of 3]
-                    [
-                        "tests/test_four.py::test_four"
-                    ],  # Step [3 of 3], not found any coupled
-                ],
-            ),
-            (
-                mock.MagicMock(spec=PytestReport),
-                [
-                    [
-                        "tests/test_tree.py::test_tree",
-                        "tests/test_one.py::test_one",
-                    ],  # Step [1 of 3]
-                    [
-                        "tests/test_tree.py::test_tree"
-                    ],  # Step [2 of 3], the last because found coupled
-                ],
-            ),
-        ),
-    )
-    def test_iteration_by_collection(self, collection, exp_buckets, report):
-        for idx, bucket in enumerate(collection):
-            assert isinstance(bucket, Bucket)
-            test_ids = [i.nodeid for i in bucket.items]
-            assert test_ids == exp_buckets[idx]
-            assert collection.last == bucket
-            bucket.failed_report = report  # should be None or TestReport
-
-        # after completed, refresh state
-        assert collection.last is None
-        assert collection.current_root == collection.bts
-
-    @pytest.mark.parametrize(
-        "by", ("test_five", "tests/test_five.py::test_five"), ids=["name", "node_id"]
-    )
-    def test_find_needed_tests(self, collection, items, by, target_item):
-        """
-        Method needed_tests must return list of tests which was ran before target test (flaky)
-        and have use the same fixtures
-
-        'tests/test_tree.py::test_tree'
-        'tests/test_one.py::test_one'
-        'tests/test_two.py::test_two'
-        'tests/test_four.py::test_four'
-
-        >> 'tests/test_five.py::test_five'
-        """
-        exp_tests = [
-            "tests/test_tree.py::test_tree",
-            "tests/test_one.py::test_one",
-            "tests/test_two.py::test_two",
-            "tests/test_four.py::test_four",
-        ]
-        idx, found_test_func = collection.find_target_test(items, by)
-        assert idx == 4
-        assert found_test_func == target_item
-
-    def test_not_found_needed_tests(self, items, collection):
-        fake_test_name = "tests/which/not_exist.py::test_fake"
-        with pytest.raises(NotFoundError, match=fake_test_name):
-            collection.find_target_test(items, fake_test_name)
-
-    @pytest.mark.parametrize("status, direction", ((True, "left"), (False, "right")))
-    def test_update_root_by_status(self, collection, status, direction):
-        origin_root = collection.current_root
-        collection.update_root_by_status(status)
-        assert collection.current_root != origin_root
-        assert collection.current_root == getattr(origin_root, direction)
-
-    def test_get_current_tests_by_left_direction(self, collection):
-        bucket = collection._get_current_tests()
-        assert isinstance(bucket, Bucket)
-        tests_range = slice(*collection.current_root.left.items)
-        assert bucket.items == collection.items[tests_range]
-
-    def test_get_current_tests_by_right_direction(self, collection):
-        collection.current_root.left = None
-        bucket = collection._get_current_tests()
-        assert isinstance(bucket, Bucket)
-        tests_range = slice(*collection.current_root.right.items)
-        assert bucket.items == collection.items[tests_range]
-
-    def test_get_last_current_tests(self, collection):
-        collection.current_root.left = None
-        collection.current_root.right = None
-        bucket = collection._get_current_tests()
-        tests_range = slice(*collection.current_root.items)
-        assert bucket.items == collection.items[tests_range]
-
-    def test_not_found_current_tests(self, collection):
-        collection.current_root = None
-        assert collection._get_current_tests() is None
-
-    def test_refresh_state(self, collection):
-        first_bucket = next(collection)
-        assert collection.last == first_bucket
-        assert collection.current_root == collection.bts
-        second_bucket = next(collection)
-        assert collection.last == second_bucket
-        assert collection.current_root != collection.bts
-        collection.refresh_state()
-        assert collection.last is None
-        assert collection.current_root == collection.bts
-
-
 class TestSherlock(object):
     @pytest.fixture
     def sherlock_with_failures(self, sherlock):
-        sherlock._reporter = mock.MagicMock(stats={"failed": [1, 2, 3, 4]})
+        sherlock.reporter = mock.MagicMock(stats={"failed": [1, 2, 3, 4]})
         return sherlock
 
     @pytest.fixture
@@ -399,46 +234,39 @@ class TestSherlock(object):
         sherlock = Sherlock(config)
         assert sherlock.config == config
         assert sherlock.collection is None
-        assert sherlock._tw is None
-        assert sherlock._reporter is None
-        assert sherlock._coupled is None
-
-    def test_first_call_terminal(self, sherlock):
-        assert sherlock._tw is None
-        assert callable(sherlock.terminal)
-        assert sherlock._tw is sherlock.terminal
-
-    def test_call_exist_terminal(self, sherlock):
-        sherlock.tw = mock.MagicMock()
-        assert sherlock.terminal is not None  # from cache
-        sherlock.terminal.write("some line # 1")
-        sherlock.terminal.write("some line # 2")
-        sherlock.config.get_terminal_writer.assert_not_called()
+        assert sherlock.reporter is None
 
     @pytest.mark.parametrize("line", ("123", 12), ids=["string", "integer"])
-    def test_write_step_to_terminal(self, sherlock, line):
+    def test_write_step_to_terminal(self, sherlock_with_prepared_collection, line):
         """
         test expected message like:
         ________ Step [123 of 666] ________
         """
-        sherlock._tw = mock.MagicMock()  # just for mock terminal
-        sherlock.write_step(line, 666)
-        sherlock.reporter.ensure_newline.assert_called_once()
         exp_msg = "Step [{} of 666]:".format(line)
-        sherlock.terminal.sep.assert_called_once_with(
+        sherlock_with_prepared_collection.reporter = mock.MagicMock()
+        sherlock_with_prepared_collection.write_step(line, 666)
+        sherlock_with_prepared_collection.reporter.ensure_newline.assert_called_once()
+        sherlock_with_prepared_collection.reporter.writer.sep.assert_called_once_with(
             "_", exp_msg, yellow=True, bold=True
         )
 
-    def test_terminal_reset_progress(self, sherlock, collection):
-        mock_session = mock.MagicMock(testscollected=6)
-        sherlock._reporter = mock.MagicMock(
+    def test_terminal_reset_progress(self, sherlock_with_prepared_collection):
+        items = list(range(5))
+        mock_session = mock.MagicMock(testscollected=len(items) + 1)
+        sherlock_with_prepared_collection.reporter = mock.MagicMock(
             _progress_nodeids_reported={1, 2}, _session=mock_session
         )
-        sherlock.reset_progress(collection)
-        assert sherlock.reporter._session.testscollected == len(collection) + 1
-        assert sherlock.reporter._progress_nodeids_reported == set()
+        sherlock_with_prepared_collection.reset_progress(items)
+        assert (
+            sherlock_with_prepared_collection.reporter._session.testscollected
+            == len(items) + 1
+        )
+        assert (
+            sherlock_with_prepared_collection.reporter._progress_nodeids_reported
+            == set()
+        )
 
-    def test_log(self, sherlock, target_item):
+    def test_log(self, target_item):
         with log(target_item) as logger:
             target_item.ihook.pytest_runtest_logstart.assert_called_once_with(
                 nodeid=target_item.nodeid, location=target_item.location
@@ -463,8 +291,7 @@ class TestSherlock(object):
             )
         )
         assert items == [target_item]
-        assert isinstance(sherlock.collection, Collection)
-        assert sherlock.collection.items != [target_item]
+        assert sherlock.collection is not None
         config.getoption.assert_called_once()
 
     @pytest.mark.parametrize("by", ("name", "nodeid"))
@@ -474,12 +301,15 @@ class TestSherlock(object):
         config = mock.MagicMock()
         config.getoption.return_value = False
         config.option.flaky_test = getattr(target_item, by)
+        will_be_modified = list(items)
+        assert sherlock.collection is None
         next(
             sherlock.pytest_collection_modifyitems(
-                session=mock.MagicMock(), config=config, items=items
+                session=mock.MagicMock(), config=config, items=will_be_modified
             )
         )
-        assert items == items
+        assert will_be_modified == items
+        assert sherlock.collection is None
         config.getoption.assert_called_once()
 
     def test_pytest_report_collectionfinish(self, sherlock_with_prepared_collection):

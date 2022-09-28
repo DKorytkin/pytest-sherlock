@@ -138,17 +138,11 @@ class Sherlock(object):
         self._session = session
         if self._reporter is None:
             self._reporter = self.config.pluginmanager.get_plugin("terminalreporter")
-        if self._tw is None:
-            self._tw = self.reporter.writer
         yield
 
     @property
     def reporter(self):
         return self._reporter
-
-    @property
-    def terminal(self):
-        return self._tw
 
     def write_step(self, step, maximum):
         """
@@ -162,7 +156,7 @@ class Sherlock(object):
         """
         self.reporter.ensure_newline()
         message = "Step [{} of {}]:".format(step, maximum)
-        self.terminal.sep("_", message, yellow=True, bold=True)
+        self.reporter.writer.sep("_", message, yellow=True, bold=True)
 
     def reset_progress(self, collection):
         """

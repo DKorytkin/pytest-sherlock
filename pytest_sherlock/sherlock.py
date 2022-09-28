@@ -121,28 +121,15 @@ def log(item):
 class Sherlock(object):
     def __init__(self, config):
         self.config = config
+        self._coupled = None  # TODO ???
         # initialize via pytest_sessionstart
-        self._session = None
-        self._tw = None
-        self._reporter = None
-        self._coupled = None
+        self.reporter = None
+        self.session = None
         # initialize via pytest_collection_modifyitems
         self.collection = None
         self.target_test_method = None
-        self._bts = None
         self._min_iterations = 0
         self._max_iterations = 0
-
-    @pytest.hookimpl(hookwrapper=True, trylast=True)
-    def pytest_sessionstart(self, session):
-        self._session = session
-        if self._reporter is None:
-            self._reporter = self.config.pluginmanager.get_plugin("terminalreporter")
-        yield
-
-    @property
-    def reporter(self):
-        return self._reporter
 
     def write_step(self, step, maximum):
         """
@@ -157,6 +144,13 @@ class Sherlock(object):
         self.reporter.ensure_newline()
         message = "Step [{} of {}]:".format(step, maximum)
         self.reporter.writer.sep("_", message, yellow=True, bold=True)
+
+    @pytest.hookimpl(hookwrapper=True, trylast=True)
+    def pytest_sessionstart(self, session):
+        self.session = session
+        if self.reporter is None:
+            self.reporter = self.config.pluginmanager.get_plugin("terminalreporter")
+        yield
 
     def reset_progress(self, collection):
         """
@@ -178,7 +172,7 @@ class Sherlock(object):
         :param Bucket[_pytest.python.Function] collection: bucket of tests
         """
         setattr(self.reporter, "_progress_nodeids_reported", set())
-        setattr(self._session, "testscollected", len(collection) + 1)  # current item
+        setattr(self.session, "testscollected", len(collection) + 1)  # current item
 
     @pytest.hookimpl(hookwrapper=True, trylast=True)
     def pytest_collection_modifyitems(self, session, config, items):
@@ -233,10 +227,10 @@ class Sherlock(object):
             )
             items[:] = [target_test_method]
             self.target_test_method = target_test_method
-            self._bts = make_tee((0, len(target_items)))
-            self._min_iterations = length(self._bts, min)
-            self._max_iterations = length(self._bts, max)
-            self.collection = make_collection(*target_items, binary_tree=self._bts)
+            binary_tree = make_tee((0, len(target_items)))
+            self._min_iterations = length(binary_tree, min)
+            self._max_iterations = length(binary_tree, max)
+            self.collection = make_collection(*target_items, binary_tree=binary_tree)
         yield
 
     @pytest.hookimpl(trylast=True)
@@ -247,9 +241,9 @@ class Sherlock(object):
         :param py._path.local.LocalPath startdir:
         :param List[_pytest.python.Function] items: contain just target test
         """
-        max_steps = self._max_iterations
-        min_steps = self._min_iterations
-        return "Try to find coupled tests in [{}-{}] steps".format(min_steps, max_steps)
+        return "Try to find coupled tests in [{}-{}] steps".format(
+            self._min_iterations, self._max_iterations
+        )
 
     def patch_report(self, failed_report, coupled):
         """

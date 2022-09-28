@@ -194,7 +194,7 @@ class TestCleanupItem(object):
 class TestSherlock(object):
     @pytest.fixture
     def sherlock_with_failures(self, sherlock):
-        sherlock._reporter = mock.MagicMock(stats={"failed": [1, 2, 3, 4]})
+        sherlock.reporter = mock.MagicMock(stats={"failed": [1, 2, 3, 4]})
         return sherlock
 
     @pytest.fixture
@@ -234,8 +234,7 @@ class TestSherlock(object):
         sherlock = Sherlock(config)
         assert sherlock.config == config
         assert sherlock.collection is None
-        assert sherlock._tw is None
-        assert sherlock._reporter is None
+        assert sherlock.reporter is None
         assert sherlock._coupled is None
 
     @pytest.mark.parametrize("line", ("123", 12), ids=["string", "integer"])
@@ -244,10 +243,10 @@ class TestSherlock(object):
         test expected message like:
         ________ Step [123 of 666] ________
         """
-        sherlock_with_prepared_collection._reporter = mock.MagicMock()
+        exp_msg = "Step [{} of 666]:".format(line)
+        sherlock_with_prepared_collection.reporter = mock.MagicMock()
         sherlock_with_prepared_collection.write_step(line, 666)
         sherlock_with_prepared_collection.reporter.ensure_newline.assert_called_once()
-        exp_msg = "Step [{} of 666]:".format(line)
         sherlock_with_prepared_collection.reporter.writer.sep.assert_called_once_with(
             "_", exp_msg, yellow=True, bold=True
         )
@@ -255,7 +254,7 @@ class TestSherlock(object):
     def test_terminal_reset_progress(self, sherlock_with_prepared_collection):
         items = list(range(5))
         mock_session = mock.MagicMock(testscollected=len(items) + 1)
-        sherlock_with_prepared_collection._reporter = mock.MagicMock(
+        sherlock_with_prepared_collection.reporter = mock.MagicMock(
             _progress_nodeids_reported={1, 2}, _session=mock_session
         )
         sherlock_with_prepared_collection.reset_progress(items)

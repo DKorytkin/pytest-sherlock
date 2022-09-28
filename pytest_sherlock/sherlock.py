@@ -121,7 +121,6 @@ def log(item):
 class Sherlock(object):
     def __init__(self, config):
         self.config = config
-        self._coupled = None  # TODO ???
         # initialize via pytest_sessionstart
         self.reporter = None
         self.session = None
@@ -253,7 +252,6 @@ class Sherlock(object):
         :param list[_pytest.python.Function] coupled: list of coupled tests, last should be target
         """
         target_item = coupled[-1]
-        # TODO join failed_reports
         if hasattr(failed_report.longrepr, "reprcrash"):
             message = failed_report.longrepr.reprcrash.message
         elif isinstance(failed_report.longrepr, six.string_types):
@@ -302,21 +300,21 @@ class Sherlock(object):
             # call to target test for checking is it still green
             with log(item) as logger:
                 reports = runtestprotocol(item, log=False)
-                failed_reports = []
+                failed_report = None
                 for report in reports:  # 3 reports: setup, call, teardown
                     if report.failed is True:
                         refresh_state(item=item)
                         logger(report=report)
-                        failed_reports.append(report)
+                        failed_report = report
                         continue
                     logger(report=report)
 
-            if len(items) == 1 and failed_reports:
-                # self.patch_report(failed_reports, coupled=[items[0], item])
+            if len(items) == 1 and failed_report:
+                self.patch_report(failed_report, coupled=[items[0], item])
                 break
 
             try:
-                items = self.collection.send(bool(failed_reports))
+                items = self.collection.send(bool(failed_report))
             except StopIteration:
                 if len(items) != 1:
                     raise  # something going wrong

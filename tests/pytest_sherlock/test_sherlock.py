@@ -235,7 +235,6 @@ class TestSherlock(object):
         assert sherlock.config == config
         assert sherlock.collection is None
         assert sherlock.reporter is None
-        assert sherlock._coupled is None
 
     @pytest.mark.parametrize("line", ("123", 12), ids=["string", "integer"])
     def test_write_step_to_terminal(self, sherlock_with_prepared_collection, line):

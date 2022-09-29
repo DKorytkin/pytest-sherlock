@@ -30,12 +30,11 @@ def _remove_cached_results_from_failed_fixtures(item):
     """
     Note: remove all cached_result attribute from every fixture
     """
-    cached_result = "cached_result"
     fixture_info = getattr(item, "_fixtureinfo", None)
-    for fixture_def_str in getattr(fixture_info, "name2fixturedefs", {}):
-        fixture_defs = fixture_info.name2fixturedefs[fixture_def_str]
+    name2fixturedefs = getattr(fixture_info, "name2fixturedefs", {})
+    for fixture_defs in name2fixturedefs.values():
         for fixture_def in fixture_defs:
-            setattr(fixture_def, cached_result, None)  # cleanup cached fixtures
+            fixture_def.finish(item._request)
     return True
 
 
@@ -129,6 +128,8 @@ class Sherlock(object):
         self.target_test_method = None
         self._min_iterations = 0
         self._max_iterations = 0
+        # initialize via pytest_runtest_makereport
+        self.is_failed = False
 
     def write_step(self, step, maximum):
         """
@@ -170,8 +171,9 @@ class Sherlock(object):
 
         :param Bucket[_pytest.python.Function] collection: bucket of tests
         """
+        self.is_failed = False
         setattr(self.reporter, "_progress_nodeids_reported", set())
-        setattr(self.session, "testscollected", len(collection) + 1)  # current item
+        setattr(self.session, "testscollected", len(collection))
 
     @pytest.hookimpl(hookwrapper=True, trylast=True)
     def pytest_collection_modifyitems(self, session, config, items):
@@ -271,57 +273,6 @@ class Sherlock(object):
             xml.stats["failure"] = 1
         return True
 
-    @pytest.hookimpl(hookwrapper=True)
-    def pytest_runtest_protocol(self, item, nextitem=None):
-        """
-        Method will run just once,
-        because session.items have just a single target test and nextitem always should be None
-        :param _pytest.python.Function item: target test
-        :param _pytest.python.Function | None nextitem: by default None
-        """
-        step = 1
-        items = next(self.collection)
-        while items:
-            self.write_step(step, self._max_iterations)
-            self.reset_progress(items)
-
-            # call tests before our "--flaky-test" to make sure they are not coupled
-            for next_idx, test_func in enumerate(items, 1):
-                with log(test_func) as logger:
-                    next_item = items[next_idx] if next_idx < len(items) else item
-                    reports = runtestprotocol(
-                        item=test_func, nextitem=next_item, log=False
-                    )
-                    for report in reports:  # 3 reports: setup, call, teardown
-                        if report.failed is True:
-                            report.outcome = "flaky"
-                        logger(report=report)
-
-            # call to target test for checking is it still green
-            with log(item) as logger:
-                reports = runtestprotocol(item, log=False)
-                failed_report = None
-                for report in reports:  # 3 reports: setup, call, teardown
-                    if report.failed is True:
-                        refresh_state(item=item)
-                        logger(report=report)
-                        failed_report = report
-                        continue
-                    logger(report=report)
-
-            if len(items) == 1 and failed_report:
-                self.patch_report(failed_report, coupled=[items[0], item])
-                break
-
-            try:
-                items = self.collection.send(bool(failed_report))
-            except StopIteration:
-                if len(items) != 1:
-                    raise  # something going wrong
-                break  # didn't find any coupled tests
-
-            step += 1
-
     def pytest_runtestloop(self, session):
         """
         Just fork origin pytest method and reuse own `pytest_runtest_protocol` inside
@@ -339,12 +290,69 @@ class Sherlock(object):
         if session.config.option.collectonly:
             return True
 
-        for i, item in enumerate(session.items):
-            nextitem = session.items[i + 1] if i + 1 < len(session.items) else None
-            # TODO move logic here
-            is_success = self.pytest_runtest_protocol(item=item, nextitem=nextitem)
-            if not is_success:
-                raise session.Failed("Found coupled tests")
-            if session.shouldstop:
-                raise session.Interrupted(session.shouldstop)
+        step = 1
+        items = next(self.collection)
+        while items:
+            items.append(self.target_test_method)
+            self.write_step(step, self._max_iterations)
+            self.reset_progress(items)
+
+            # call tests before our "--flaky-test" to make sure they are not coupled
+            # for next_idx, test_func in enumerate(items, 1):
+            #     with log(test_func) as logger:
+            #         next_item = items[next_idx] if next_idx < len(items) else item
+            #         reports = runtestprotocol(
+            #             item=test_func, nextitem=next_item, log=False
+            #         )
+            #         for report in reports:  # 3 reports: setup, call, teardown
+            #             if report.failed is True:
+            #                 report.outcome = "flaky"
+            #             logger(report=report)
+            #
+            # # call to target test for checking is it still green
+            # with log(item) as logger:
+            #     reports = runtestprotocol(item, log=False)
+            #     failed_report = None
+            #     for report in reports:  # 3 reports: setup, call, teardown
+            #         if report.failed is True:
+            #             refresh_state(item=item)
+            #             logger(report=report)
+            #             failed_report = report
+            #             continue
+            #         logger(report=report)
+
+            for next_idx, item in enumerate(items, 1):
+                nextitem = items[next_idx] if next_idx < len(items) else item
+                self.config.hook.pytest_runtest_protocol(item=item, nextitem=nextitem)
+                if session.shouldfail:
+                    raise session.Failed(session.shouldfail)
+                if session.shouldstop:
+                    raise session.Interrupted(session.shouldstop)
+
+            if len(items) == 1 and self.is_failed:
+                # self.patch_report(failed_report, coupled=[items[0], item])
+                break
+
+            try:
+                # TODO move to pytest_runtest_makereport
+                items = self.collection.send(bool(self.is_failed))
+            except StopIteration as err:
+                if len(items) != 1:
+                    raise SherlockError("Something is going wrong") from err
+                break  # didn't find any coupled tests
+
+            step += 1
+            # refresh_state(item=self.target_test_method)
         return True
+
+    @pytest.hookimpl(hookwrapper=True, trylast=True)
+    def pytest_runtest_makereport(self, item, call):
+        report = yield
+        test_report = report.get_result()
+        if test_report.nodeid == self.target_test_method.nodeid:
+            self.is_failed = self.is_failed or test_report.outcome != "passed"
+            # if self.is_failed and test_report.when == "teardown":
+            # refresh_state(item=item)
+        elif test_report.outcome != "passed":
+            test_report.outcome = "flaky"
+            test_report.longrepr.toterminal(self.reporter.writer)

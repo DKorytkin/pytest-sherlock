@@ -65,7 +65,7 @@ def refresh_state(item):
     # TODO need investigate
     _remove_cached_results_from_failed_fixtures(item)
     # TODO fix me
-    # _remove_failed_setup_state_from_session(item)
+    _remove_failed_setup_state_from_session(item)
     return True
 
 
@@ -316,6 +316,7 @@ class Sherlock(object):
                     raise session.Interrupted(session.shouldstop)
 
             try:
+                # shift left if a report is red or shifts right if green
                 items = self.collection.send(bool(self.failed_report))
             except StopIteration as err:
                 if len(items) != 2:  # the last iteration must contain two tests

@@ -57,14 +57,12 @@ def _remove_failed_setup_state_from_session(item):
     for col in setup_state.stack:
         if hasattr(col, prepare_exc):
             delattr(col, prepare_exc)
-    setup_state.stack = list()
+    setup_state.stack = []
     return True
 
 
 def refresh_state(item):
-    # TODO need investigate
     _remove_cached_results_from_failed_fixtures(item)
-    # TODO fix me
     _remove_failed_setup_state_from_session(item)
     return True
 
@@ -151,9 +149,8 @@ class Sherlock(object):
         :param str|int step:
         :param str|int maximum:
         """
-        self.reporter.ensure_newline()
         message = "Step [{} of {}]:".format(step, maximum)
-        self.reporter.writer.sep("_", message, yellow=True, bold=True)
+        self.reporter.write_sep("_", message, yellow=True, bold=True)
 
     def reset_progress(self, items):
         """
@@ -341,4 +338,4 @@ class Sherlock(object):
         elif test_report.outcome != "passed":
             test_report.outcome = "flaky"
             if self.verbose:
-                test_report.longrepr.toterminal(self.reporter.writer)
+                test_report.longrepr.toterminal(self.reporter._tw)

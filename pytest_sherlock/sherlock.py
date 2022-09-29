@@ -15,13 +15,19 @@ class SherlockError(Exception):
 
 class NotFoundError(SherlockError):
     @classmethod
-    def make(cls, test_name, target_tests=None):
+    def make_from(cls, test_name, items):
         msg = (
             "Test not found: {}. "
             "Please validate your test name (ex: 'tests/unit/test_one.py::test_first')"
         ).format(test_name)
-        if target_tests:
-            msg += "\nFound similar test names: {}".format(target_tests)
+
+        if ".py::" in test_name:
+            target_test_name = test_name.split("::")[-1]
+        else:
+            target_test_name = test_name.split("[")[0]
+        target_test_names = [i.nodeid for i in items if target_test_name in i.name]
+        if target_test_names:
+            msg += "\nFound similar test names: {}".format(target_test_names)
         return cls(msg)
 
 
@@ -86,12 +92,7 @@ def find_target_test(items, test_name):
         if test_name in (test_func.name, test_func.nodeid):
             return idx, test_func
 
-    if ".py::" in test_name:
-        target_test_name = test_name.split("::")[-1]
-    else:
-        target_test_name = test_name.split("[")[0]
-    target_test_names = [i.nodeid for i in items if target_test_name in i.name]
-    raise NotFoundError.make(test_name, target_tests=target_test_names)
+    raise NotFoundError.make_from(test_name, items)
 
 
 def make_collection(items, binary_tree=None):
@@ -317,7 +318,7 @@ class Sherlock(object):
                 items = self.collection.send(bool(self.failed_report))
             except StopIteration as err:
                 if len(items) != 2:  # the last iteration must contain two tests
-                    raise SherlockError("Something is going wrong") from err
+                    raise SherlockError("Something is going wrong")
                 if self.failed_report:
                     self.patch_report(self.failed_report, coupled=items)
                 break

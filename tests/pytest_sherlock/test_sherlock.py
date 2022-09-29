@@ -2,19 +2,13 @@ import argparse
 
 import mock
 import pytest
-from _pytest.config import Config
+from _pytest.config import Config, PytestPluginManager
 from _pytest.junitxml import _NodeReporter
 from _pytest.python import Function
 from _pytest.runner import TestReport as PytestReport
+from _pytest.terminal import TerminalReporter
 
-from pytest_sherlock.sherlock import (
-    Sherlock,
-    _remove_cached_results_from_failed_fixtures,
-    _remove_failed_setup_state_from_session,
-    log,
-    refresh_state,
-    write_coupled_report,
-)
+from pytest_sherlock.sherlock import Sherlock, log, refresh_state, write_coupled_report
 
 FAKE_FIXTURE_NAMES = ["my_fixture", "fixture_do_something", "other_fixture"]
 
@@ -64,12 +58,20 @@ def session():
 
 
 @pytest.fixture
-def config(target_item):
-    plugin_manager = mock.MagicMock()
+def reporter():
+    return mock.MagicMock(spec=TerminalReporter, stats={})
+
+
+@pytest.fixture
+def config(target_item, reporter):
+    plugin_manager = mock.MagicMock(spec=PytestPluginManager)
+    plugin_manager.get_plugin.return_value = reporter
     option_namespace = argparse.Namespace(flaky_test=target_item.nodeid)
-    return mock.MagicMock(
+    c = mock.MagicMock(
         spec=Config, pluginmanager=plugin_manager, option=option_namespace
     )
+    c.getvalue.return_value = 2
+    return c
 
 
 @pytest.fixture
@@ -123,15 +125,17 @@ class TestCleanupItem(object):
     @staticmethod
     def check_cleanup_fixtures(fixtures):
         assert fixtures
-        for fixture_name, funcs in fixtures.items():
+        for funcs in fixtures.values():
             for func in funcs:
-                assert func.cached_result is None, "cached_result wasn't cleanup"
+                assert not hasattr(
+                    func, "cached_result"
+                ), "cached_result wasn't cleanup"
 
     @staticmethod
     def check_cleanup_stack(stack):
         assert stack
-        for s in stack:
-            assert not hasattr(s, "_prepare_exc"), "_prepare_exc wasn't delete"
+        for cal in stack:
+            assert not hasattr(cal, "_prepare_exc"), "_prepare_exc wasn't delete"
 
     def test_refresh_state(self, called_item, fixtures, stack):
         assert refresh_state(called_item)
@@ -182,20 +186,12 @@ class TestCleanupItem(object):
         )
         assert write_coupled_report(coupled_tests) == exp_message
 
-    def test_remove_cached_results_from_failed_fixtures(self, called_item, fixtures):
-        assert _remove_cached_results_from_failed_fixtures(called_item)
-        self.check_cleanup_fixtures(fixtures)
-
-    def test_remove_failed_setup_state_from_session(self, called_item, stack):
-        assert _remove_failed_setup_state_from_session(called_item)
-        self.check_cleanup_stack(stack)
-
 
 class TestSherlock(object):
     @pytest.fixture
-    def sherlock_with_failures(self, sherlock):
-        sherlock.reporter = mock.MagicMock(stats={"failed": [1, 2, 3, 4]})
-        return sherlock
+    def sherlock_with_failures(self, sherlock_with_prepared_collection):
+        sherlock_with_prepared_collection.reporter.stats["failed"] = [1, 2, 3, 4]
+        return sherlock_with_prepared_collection
 
     @pytest.fixture
     def mock_coupled(self):
@@ -231,10 +227,28 @@ class TestSherlock(object):
 
     def test_create_instance(self):
         config = mock.MagicMock(spec=Config)  # pytest config
+        config.getvalue.return_value = 2
+
         sherlock = Sherlock(config)
         assert sherlock.config == config
+        assert sherlock.verbose is True
         assert sherlock.collection is None
+        assert sherlock.session is None
         assert sherlock.reporter is None
+        assert sherlock.target_test_method is None
+        assert sherlock.failed_report is None
+
+    def test_instance_after_pytest_sessionstart(self, config, session, reporter):
+        sherlock = Sherlock(config)
+        next(sherlock.pytest_sessionstart(session))
+
+        assert sherlock.config == config
+        assert sherlock.verbose is True
+        assert sherlock.collection is None
+        assert sherlock.session == session
+        assert sherlock.reporter == reporter
+        assert sherlock.target_test_method is None
+        assert sherlock.failed_report is None
 
     @pytest.mark.parametrize("line", ("123", 12), ids=["string", "integer"])
     def test_write_step_to_terminal(self, sherlock_with_prepared_collection, line):
@@ -243,24 +257,22 @@ class TestSherlock(object):
         ________ Step [123 of 666] ________
         """
         exp_msg = "Step [{} of 666]:".format(line)
-        sherlock_with_prepared_collection.reporter = mock.MagicMock()
         sherlock_with_prepared_collection.write_step(line, 666)
-        sherlock_with_prepared_collection.reporter.ensure_newline.assert_called_once()
-        sherlock_with_prepared_collection.reporter.writer.sep.assert_called_once_with(
+        sherlock_with_prepared_collection.reporter.write_sep.assert_called_once_with(
             "_", exp_msg, yellow=True, bold=True
         )
 
     def test_terminal_reset_progress(self, sherlock_with_prepared_collection):
         items = list(range(5))
-        mock_session = mock.MagicMock(testscollected=len(items) + 1)
-        sherlock_with_prepared_collection.reporter = mock.MagicMock(
-            _progress_nodeids_reported={1, 2}, _session=mock_session
+        sherlock_with_prepared_collection.session.testscollected = 999
+        setattr(
+            sherlock_with_prepared_collection.reporter,
+            "_progress_nodeids_reported",
+            {1, 2},
         )
+
         sherlock_with_prepared_collection.reset_progress(items)
-        assert (
-            sherlock_with_prepared_collection.reporter._session.testscollected
-            == len(items) + 1
-        )
+        assert sherlock_with_prepared_collection.session.testscollected == len(items)
         assert (
             sherlock_with_prepared_collection.reporter._progress_nodeids_reported
             == set()

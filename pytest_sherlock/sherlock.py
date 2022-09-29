@@ -5,7 +5,6 @@ import contextlib
 import pytest
 import six
 from _pytest.junitxml import _NodeReporter
-from _pytest.runner import TestReport, runtestprotocol
 
 from pytest_sherlock.binary_tree_search import length, make_tee
 
@@ -16,13 +15,19 @@ class SherlockError(Exception):
 
 class NotFoundError(SherlockError):
     @classmethod
-    def make(cls, test_name, target_tests=None):
+    def make_from(cls, test_name, items):
         msg = (
             "Test not found: {}. "
             "Please validate your test name (ex: 'tests/unit/test_one.py::test_first')"
         ).format(test_name)
-        if target_tests:
-            msg += "\nFound similar test names: {}".format(target_tests)
+
+        if ".py::" in test_name:
+            target_test_name = test_name.split("::")[-1]
+        else:
+            target_test_name = test_name.split("[")[0]
+        target_test_names = [i.nodeid for i in items if target_test_name in i.name]
+        if target_test_names:
+            msg += "\nFound similar test names: {}".format(target_test_names)
         return cls(msg)
 
 
@@ -30,12 +35,21 @@ def _remove_cached_results_from_failed_fixtures(item):
     """
     Note: remove all cached_result attribute from every fixture
     """
-    cached_result = "cached_result"
-    fixture_info = getattr(item, "_fixtureinfo", None)
-    for fixture_def_str in getattr(fixture_info, "name2fixturedefs", {}):
-        fixture_defs = fixture_info.name2fixturedefs[fixture_def_str]
+    try:
+        info = item._fixtureinfo
+    except AttributeError:
+        # doctests items have no _fixtureinfo attribute
+        return
+    if not info.name2fixturedefs:
+        # this test item does not use any fixtures
+        return
+
+    for _, fixture_defs in sorted(info.name2fixturedefs.items()):
+        if not fixture_defs:
+            continue
         for fixture_def in fixture_defs:
-            setattr(fixture_def, cached_result, None)  # cleanup cached fixtures
+            if hasattr(fixture_def, "cached_result"):
+                del fixture_def.cached_result
     return True
 
 
@@ -49,12 +63,11 @@ def _remove_failed_setup_state_from_session(item):
     for col in setup_state.stack:
         if hasattr(col, prepare_exc):
             delattr(col, prepare_exc)
-    setup_state.stack = list()
+    setup_state.stack = []
     return True
 
 
 def refresh_state(item):
-    # TODO need investigate
     _remove_cached_results_from_failed_fixtures(item)
     _remove_failed_setup_state_from_session(item)
     return True
@@ -75,17 +88,11 @@ def write_coupled_report(coupled_tests):
 
 
 def find_target_test(items, test_name):
-
     for idx, test_func in enumerate(items):
         if test_name in (test_func.name, test_func.nodeid):
             return idx, test_func
 
-    if ".py::" in test_name:
-        target_test_name = test_name.split("::")[-1]
-    else:
-        target_test_name = test_name.split("[")[0]
-    target_test_names = [i.nodeid for i in items if target_test_name in i.name]
-    raise NotFoundError.make(test_name, target_tests=target_test_names)
+    raise NotFoundError.make_from(test_name, items)
 
 
 def make_collection(items, binary_tree=None):
@@ -121,6 +128,7 @@ def log(item):
 class Sherlock(object):
     def __init__(self, config):
         self.config = config
+        self.verbose = self.config.getvalue("verbose") >= 2
         # initialize via pytest_sessionstart
         self.reporter = None
         self.session = None
@@ -129,6 +137,8 @@ class Sherlock(object):
         self.target_test_method = None
         self._min_iterations = 0
         self._max_iterations = 0
+        # initialize via pytest_runtest_makereport
+        self.failed_report = None
 
     def write_step(self, step, maximum):
         """
@@ -140,18 +150,10 @@ class Sherlock(object):
         :param str|int step:
         :param str|int maximum:
         """
-        self.reporter.ensure_newline()
         message = "Step [{} of {}]:".format(step, maximum)
-        self.reporter.writer.sep("_", message, yellow=True, bold=True)
+        self.reporter.write_sep("_", message, yellow=True, bold=True)
 
-    @pytest.hookimpl(hookwrapper=True, trylast=True)
-    def pytest_sessionstart(self, session):
-        self.session = session
-        if self.reporter is None:
-            self.reporter = self.config.pluginmanager.get_plugin("terminalreporter")
-        yield
-
-    def reset_progress(self, collection):
+    def reset_progress(self, items):
         """
         Patch progress for each step
         100% should be all tests from collection + target test
@@ -168,10 +170,45 @@ class Sherlock(object):
         tests/exmaple/test_all_read.py::test_read_params FAILED                 [100%]
         ...
 
-        :param Bucket[_pytest.python.Function] collection: bucket of tests
+        :param Bucket[_pytest.python.Function] items: bucket of tests
         """
+        self.failed_report = None
         setattr(self.reporter, "_progress_nodeids_reported", set())
-        setattr(self.session, "testscollected", len(collection) + 1)  # current item
+        setattr(self.session, "testscollected", len(items))
+
+    def patch_report(self, failed_report, coupled):
+        """
+        Patch reports console output and Junit result xml
+        to avoid multi errors in report
+        :param _pytest.runner.TestReport failed_report:
+        :param list[_pytest.python.Function] coupled: list of coupled tests, last should be target
+        """
+        target_item = coupled[-1]
+        if hasattr(failed_report.longrepr, "reprcrash"):
+            message = failed_report.longrepr.reprcrash.message
+        elif isinstance(failed_report.longrepr, six.string_types):
+            message = failed_report.longrepr
+        else:
+            message = str(failed_report.longrepr)
+        failed_report.longrepr = "\n{}\n\n{}".format(
+            write_coupled_report(coupled), message
+        )
+        self.reporter.stats["failed"] = [failed_report]
+        xml = getattr(self.config, "_xml", None)
+        if xml:
+            node_reporter = _NodeReporter(target_item.nodeid, xml)
+            node_reporter.append_failure(failed_report)
+            node_reporter.finalize()
+            xml.node_reporters_ordered[:] = [node_reporter]
+            xml.stats["failure"] = 1
+        return True
+
+    @pytest.hookimpl(hookwrapper=True, trylast=True)
+    def pytest_sessionstart(self, session):
+        self.session = session
+        if self.reporter is None:
+            self.reporter = self.config.pluginmanager.get_plugin("terminalreporter")
+        yield
 
     @pytest.hookimpl(hookwrapper=True, trylast=True)
     def pytest_collection_modifyitems(self, session, config, items):
@@ -244,84 +281,6 @@ class Sherlock(object):
             self._min_iterations, self._max_iterations
         )
 
-    def patch_report(self, failed_report, coupled):
-        """
-        Patch reports console output and Junit result xml
-        to avoid multi errors in report
-        :param _pytest.runner.TestReport failed_report:
-        :param list[_pytest.python.Function] coupled: list of coupled tests, last should be target
-        """
-        target_item = coupled[-1]
-        if hasattr(failed_report.longrepr, "reprcrash"):
-            message = failed_report.longrepr.reprcrash.message
-        elif isinstance(failed_report.longrepr, six.string_types):
-            message = failed_report.longrepr
-        else:
-            message = str(failed_report.longrepr)
-        failed_report.longrepr = "\n{}\n\n{}".format(
-            write_coupled_report(coupled), message
-        )
-        self.reporter.stats["failed"] = [failed_report]
-        xml = getattr(self.config, "_xml", None)
-        if xml:
-            node_reporter = _NodeReporter(target_item.nodeid, xml)
-            node_reporter.append_failure(failed_report)
-            node_reporter.finalize()
-            xml.node_reporters_ordered[:] = [node_reporter]
-            xml.stats["failure"] = 1
-        return True
-
-    @pytest.hookimpl(hookwrapper=True)
-    def pytest_runtest_protocol(self, item, nextitem=None):
-        """
-        Method will run just once,
-        because session.items have just a single target test and nextitem always should be None
-        :param _pytest.python.Function item: target test
-        :param _pytest.python.Function | None nextitem: by default None
-        """
-        step = 1
-        items = next(self.collection)
-        while items:
-            self.write_step(step, self._max_iterations)
-            self.reset_progress(items)
-
-            # call tests before our "--flaky-test" to make sure they are not coupled
-            for next_idx, test_func in enumerate(items, 1):
-                with log(test_func) as logger:
-                    next_item = items[next_idx] if next_idx < len(items) else item
-                    reports = runtestprotocol(
-                        item=test_func, nextitem=next_item, log=False
-                    )
-                    for report in reports:  # 3 reports: setup, call, teardown
-                        if report.failed is True:
-                            report.outcome = "flaky"
-                        logger(report=report)
-
-            # call to target test for checking is it still green
-            with log(item) as logger:
-                reports = runtestprotocol(item, log=False)
-                failed_report = None
-                for report in reports:  # 3 reports: setup, call, teardown
-                    if report.failed is True:
-                        refresh_state(item=item)
-                        logger(report=report)
-                        failed_report = report
-                        continue
-                    logger(report=report)
-
-            if len(items) == 1 and failed_report:
-                self.patch_report(failed_report, coupled=[items[0], item])
-                break
-
-            try:
-                items = self.collection.send(bool(failed_report))
-            except StopIteration:
-                if len(items) != 1:
-                    raise  # something going wrong
-                break  # didn't find any coupled tests
-
-            step += 1
-
     def pytest_runtestloop(self, session):
         """
         Just fork origin pytest method and reuse own `pytest_runtest_protocol` inside
@@ -339,12 +298,45 @@ class Sherlock(object):
         if session.config.option.collectonly:
             return True
 
-        for i, item in enumerate(session.items):
-            nextitem = session.items[i + 1] if i + 1 < len(session.items) else None
-            # TODO move logic here
-            is_success = self.pytest_runtest_protocol(item=item, nextitem=nextitem)
-            if not is_success:
-                raise session.Failed("Found coupled tests")
-            if session.shouldstop:
-                raise session.Interrupted(session.shouldstop)
+        step = 1
+        items = next(self.collection)
+        while items:
+            items.append(self.target_test_method)
+            self.write_step(step, self._max_iterations)
+            self.reset_progress(items)
+
+            for next_idx, item in enumerate(items, 1):
+                next_item = items[next_idx] if next_idx < len(items) else None
+                self.config.hook.pytest_runtest_protocol(item=item, nextitem=next_item)
+                if session.shouldfail:
+                    raise session.Failed(session.shouldfail)
+                if session.shouldstop:
+                    raise session.Interrupted(session.shouldstop)
+
+            try:
+                # shift left if a report is red or shifts right if green
+                items = self.collection.send(bool(self.failed_report))
+            except StopIteration as err:
+                if len(items) != 2:  # the last iteration must contain two tests
+                    raise SherlockError("Something is going wrong")
+                if self.failed_report:
+                    self.patch_report(self.failed_report, coupled=items)
+                break
+
+            step += 1
+            refresh_state(item=self.target_test_method)
         return True
+
+    @pytest.hookimpl(hookwrapper=True, trylast=True)
+    def pytest_runtest_makereport(self, item, call):
+        report = yield
+        test_report = report.get_result()
+        if (
+            test_report.nodeid == self.target_test_method.nodeid
+            and test_report.outcome != "passed"
+        ):
+            self.failed_report = test_report
+        elif test_report.outcome != "passed":
+            test_report.outcome = "flaky"
+            if self.verbose:
+                test_report.longrepr.toterminal(self.reporter._tw)

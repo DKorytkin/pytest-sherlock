@@ -31,7 +31,9 @@ pip install pytest-sherlock
 ```bash
 pytest tests/exmaple/test_c_delete.py tests/exmaple/test_b_modify.py tests/exmaple/test_all_read.py --flaky-test="test_read_params" -vv
 ```
+
 Plugin didn't run all tests, it try to find some possible guilty test and will run first
+
 ```bash
 Try to find coupled tests in [3-4] steps
 __________________________ Step [1 of 4]: __________________________
@@ -75,6 +77,36 @@ AssertionError: assert 13 == 2
 
 tests/exmaple/test_all_read.py:8: AssertionError
 =================== 1 failed, 9 passed in 0.08 seconds ===================
+```
+
+The plugin also supports `--lf` (last failed) option to rerun found coupled tests.
+It allows us to make sure that coupled tests are true.
+
+```shell
+pytest tests/exmaple/test_c_delete.py tests/exmaple/test_b_modify.py tests/exmaple/test_all_read.py --lf
+```
+```shell
+=========================================================================== test session starts ============================================================================
+platform darwin -- Python 3.7.10, pytest-3.5.1, py-1.7.0, pluggy-0.6.0
+collected 10 items / 8 deselected
+run-last-failure: rerun previous 2 failures
+
+tests/exmaple/test_b_modify.py .                                                                                                                                     [ 50%]
+tests/exmaple/test_all_read.py F                                                                                                                                     [100%]
+
+================================================================================= FAILURES =================================================================================
+_____________________________________________________________________________ test_read_params _____________________________________________________________________________
+
+config = {'a': 1, 'b': 13, 'c': 3}, param = 'b'
+
+    def test_read_params(config, param):
+>       assert config.get(param) == 2
+E       AssertionError: assert 13 == 2
+E        +  where 13 = <built-in method get of dict object at 0x10c964cd0>('b')
+E        +    where <built-in method get of dict object at 0x10c964cd0> = {'a': 1, 'b': 13, 'c': 3}.get
+
+tests/exmaple/test_all_read.py:6: AssertionError
+============================================================= 1 failed, 1 passed, 8 deselected in 0.05 seconds =============================================================
 ```
 
 ### TODO

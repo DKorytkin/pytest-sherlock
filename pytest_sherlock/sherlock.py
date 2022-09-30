@@ -139,6 +139,8 @@ class Sherlock(object):
         self._max_iterations = 0
         # initialize via pytest_runtest_makereport
         self.failed_report = None
+        # initialize via pytest_runtestloop
+        self.last_failed = None
 
     def write_step(self, step, maximum):
         """
@@ -316,11 +318,12 @@ class Sherlock(object):
             try:
                 # shift left if a report is red or shifts right if green
                 items = self.collection.send(bool(self.failed_report))
-            except StopIteration as err:
+            except StopIteration:
                 if len(items) != 2:  # the last iteration must contain two tests
                     raise SherlockError("Something is going wrong")
                 if self.failed_report:
                     self.patch_report(self.failed_report, coupled=items)
+                    self.last_failed = items
                 break
 
             step += 1
@@ -340,3 +343,11 @@ class Sherlock(object):
             test_report.outcome = "flaky"
             if self.verbose:
                 test_report.longrepr.toterminal(self.reporter._tw)
+
+    @pytest.hookimpl(hookwrapper=True, trylast=True)
+    def pytest_sessionfinish(self, session):
+        yield
+        if self.last_failed:
+            self.config.cache.set(
+                "cache/lastfailed", {i.nodeid: True for i in self.last_failed}
+            )

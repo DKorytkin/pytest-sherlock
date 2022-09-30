@@ -11,6 +11,13 @@ def pytest_addoption(parser):
         dest="flaky_test",
         help="Set the flaky tests which probably have dependent tests",
     )
+    group.addoption(
+        "--step",
+        action="store",
+        dest="step",
+        type=int,
+        help="Reproduce from exists steps `Step [1 of ...]`",
+    )
 
 
 def pytest_configure(config):

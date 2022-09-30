@@ -125,9 +125,49 @@ def log(item):
     item.ihook.pytest_runtest_logfinish(nodeid=item.nodeid, location=item.location)
 
 
+class Cache(object):
+    def __init__(self, config):
+        """
+        Parameters
+        ----------
+        config: _pytest.config.Config
+        """
+        self.config = config
+        self._data = []
+
+    def get(self):
+        """
+        Returns
+        -------
+        list[list[str]]
+        """
+        return self.config.cache.get(self.KEY, [])
+
+    def add(self, items):
+        """
+        Parameters
+        ----------
+        items: list[_pytest.python.Function]
+
+        Returns
+        -------
+        bool
+        """
+        self._data.append([item.nodeid for item in items])
+        return True
+
+    def store(self):
+
+        return True
+
+
 class Sherlock(object):
+    KEY = "PytestSherlock/steps"
+
     def __init__(self, config):
         self.config = config
+        self._steps = []
+        self.start_from_step = self.config.option.step
         self.verbose = self.config.getvalue("verbose") >= 2
         # initialize via pytest_sessionstart
         self.reporter = None
@@ -141,6 +181,34 @@ class Sherlock(object):
         self.failed_report = None
         # initialize via pytest_runtestloop
         self.last_failed = None
+
+    def add_step(self, items):
+        self._steps.append([item.nodeid for item in items])
+        return True
+
+    def setup_from_step(self, items):
+        """
+        Uses cache to get data about previous execution for filtering out tests only for this step.
+        Could be useful in case when global state was modified and
+        reduce step to reproduce an issue.
+
+        Parameters
+        ----------
+        items: list[_pytest.python.Function]
+
+        Returns
+        -------
+        list[_pytest.python.Function]
+        """
+        if self.start_from_step:
+            target_step = self.start_from_step - 1
+            if self._steps and len(self._steps) > target_step:
+                tests_from_step = self._steps[target_step]
+                items[:] = [item for item in items if item.nodeid in tests_from_step]
+            else:
+                # not found any steps in cache from previous execution
+                self.start_from_step = None
+        return items
 
     def write_step(self, step, maximum):
         """
@@ -172,7 +240,7 @@ class Sherlock(object):
         tests/exmaple/test_all_read.py::test_read_params FAILED                 [100%]
         ...
 
-        :param Bucket[_pytest.python.Function] items: bucket of tests
+        :param list[_pytest.python.Function] items: bucket of tests
         """
         self.failed_report = None
         setattr(self.reporter, "_progress_nodeids_reported", set())
@@ -208,6 +276,7 @@ class Sherlock(object):
     @pytest.hookimpl(hookwrapper=True, trylast=True)
     def pytest_sessionstart(self, session):
         self.session = session
+        self._steps = self.config.cache.get(self.KEY, [])
         if self.reporter is None:
             self.reporter = self.config.pluginmanager.get_plugin("terminalreporter")
         yield
@@ -256,7 +325,7 @@ class Sherlock(object):
                 items, config.option.flaky_test.strip()
             )
             target_items = sorted(
-                items[:idx],
+                self.setup_from_step(items[:idx]),
                 key=lambda item: (
                     len(set(item.fixturenames) & set(target_test_method.fixturenames)),
                     item.parent.nodeid,  # TODO can we do AST or Name or Content analysis?
@@ -279,9 +348,12 @@ class Sherlock(object):
         :param py._path.local.LocalPath startdir:
         :param List[_pytest.python.Function] items: contain just target test
         """
-        return "Try to find coupled tests in [{}-{}] steps".format(
+        msg = "Try to find coupled tests in [{}-{}] steps".format(
             self._min_iterations, self._max_iterations
         )
+        if self.start_from_step:
+            msg = "{} (reproduce from {} step)".format(msg, self.start_from_step)
+        return msg
 
     def pytest_runtestloop(self, session):
         """
@@ -306,6 +378,7 @@ class Sherlock(object):
             items.append(self.target_test_method)
             self.write_step(step, self._max_iterations)
             self.reset_progress(items)
+            self.add_step(items)
 
             for next_idx, item in enumerate(items, 1):
                 next_item = items[next_idx] if next_idx < len(items) else None
@@ -347,6 +420,7 @@ class Sherlock(object):
     @pytest.hookimpl(hookwrapper=True, trylast=True)
     def pytest_sessionfinish(self, session):
         yield
+        self.config.cache.set(self.KEY, self._steps)
         if self.last_failed:
             self.config.cache.set(
                 "cache/lastfailed", {i.nodeid: True for i in self.last_failed}

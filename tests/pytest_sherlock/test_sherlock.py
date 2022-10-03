@@ -63,13 +63,26 @@ def reporter():
 
 
 @pytest.fixture
-def config(target_item, reporter):
+def step():
+    return None
+
+
+@pytest.fixture
+def cache():
+    m = mock.MagicMock()
+    m.get.return_value = None
+    return m
+
+
+@pytest.fixture
+def config(target_item, reporter, step, cache):
     plugin_manager = mock.MagicMock(spec=PytestPluginManager)
     plugin_manager.get_plugin.return_value = reporter
-    option_namespace = argparse.Namespace(flaky_test=target_item.nodeid)
+    option_namespace = argparse.Namespace(flaky_test=target_item.nodeid, step=step)
     c = mock.MagicMock(
         spec=Config, pluginmanager=plugin_manager, option=option_namespace
     )
+    c.cache = cache
     c.getvalue.return_value = 2
     return c
 
@@ -225,9 +238,11 @@ class TestSherlock(object):
         )
         return mock.MagicMock(spec=PytestReport, longrepr=longrepr)
 
-    def test_create_instance(self):
+    def test_create_instance(self, cache):
         config = mock.MagicMock(spec=Config)  # pytest config
         config.getvalue.return_value = 2
+        config.option = mock.MagicMock(step=None)
+        config.cache = cache
 
         sherlock = Sherlock(config)
         assert sherlock.config == config

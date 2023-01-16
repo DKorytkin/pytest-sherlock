@@ -8,6 +8,6 @@ coverage
 
 black
 isort
-pylint
+pylint==2.7.4
 twine>=1.15.0
 wheel>=0.34.2

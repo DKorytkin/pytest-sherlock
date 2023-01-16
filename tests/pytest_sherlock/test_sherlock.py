@@ -1,6 +1,6 @@
 import argparse
+from unittest import mock
 
-import mock
 import pytest
 from _pytest.config import Config, PytestPluginManager
 from _pytest.junitxml import _NodeReporter

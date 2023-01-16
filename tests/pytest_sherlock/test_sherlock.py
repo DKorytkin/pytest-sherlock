@@ -140,9 +140,7 @@ class TestCleanupItem(object):
         assert fixtures
         for funcs in fixtures.values():
             for func in funcs:
-                assert not hasattr(
-                    func, "cached_result"
-                ), "cached_result wasn't cleanup"
+                assert func.cached_result is None, "`cached_result` wasn't cleanup"
 
     @staticmethod
     def check_cleanup_stack(stack):

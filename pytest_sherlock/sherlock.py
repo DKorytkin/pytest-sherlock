@@ -49,7 +49,7 @@ def _remove_cached_results_from_failed_fixtures(item):
             continue
         for fixture_def in fixture_defs:
             if hasattr(fixture_def, "cached_result"):
-                del fixture_def.cached_result
+                fixture_def.cached_result = None
     return True
 
 

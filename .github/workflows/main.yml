@@ -16,16 +16,15 @@ jobs:
       - name: Install Dependencies
         run: |
           pip install -r requirements-dev.txt
-          pip install isort black pylint==2.7.4
 
       - name: Black
-        run: black . --check --diff
+        run: black pytest_sherlock --check --diff
 
       - name: Pylint
         run: pylint --py3k pytest_sherlock
 
       - name: Isort
-        run: isort . --check
+        run: isort pytest_sherlock --check
 
   Tests:
     runs-on: ubuntu-20.04
@@ -63,7 +62,7 @@ jobs:
       - name: Install Dependencies
         run: |
           pip install -r requirements-dev.txt
-          pip install -U pytest
+          pip install -U pytest pytest-cov coverage
           pip install -e .
 
       - name: Testing
@@ -84,6 +83,7 @@ jobs:
         run: |
           pip install -r requirements-dev.txt
           pip install -U git+https://github.com/pytest-dev/pytest.git
+          pip install -U pytest-cov coverage
           pip install -e .
 
       - name: Testing

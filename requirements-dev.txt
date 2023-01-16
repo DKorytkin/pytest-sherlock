@@ -1,16 +1,13 @@
-setuptools==65.5.1
-six==1.13.0
+setuptools
+six
 pytest==3.5.1
-mock==3.0.5
 
-py==1.10.0
-pluggy==0.6.0
-pytest-cov==2.5.1
-codecov==2.0.16
-coverage==5.0.3
+pytest-cov
+codecov
+coverage
 
-# black
-# isort
-# pylint==2.7.4
+black
+isort
+pylint
 twine>=1.15.0
 wheel>=0.34.2

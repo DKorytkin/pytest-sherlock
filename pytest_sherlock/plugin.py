@@ -2,7 +2,6 @@ from __future__ import absolute_import
 
 from pytest_sherlock.sherlock import Sherlock
 
-
 PLUGIN_NAME = "pytest_sherlock.plugin"
 
 

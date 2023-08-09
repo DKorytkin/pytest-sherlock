@@ -157,7 +157,6 @@ class Cache(object):
         return True
 
     def store(self):
-
         return True
 
 

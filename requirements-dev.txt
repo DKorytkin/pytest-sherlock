@@ -1,6 +1,6 @@
 setuptools
 six
-pytest==3.5.1
+pytest==7.4.0
 
 pytest-cov
 codecov

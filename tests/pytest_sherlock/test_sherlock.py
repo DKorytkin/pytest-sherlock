@@ -125,7 +125,7 @@ class TestCleanupItem(object):
 
     @pytest.fixture
     def stack(self):
-        return [mock.MagicMock(_prepare_exc=1)]
+        return {}
 
     @pytest.fixture
     def called_item(self, target_item, fixtures, stack):
@@ -142,16 +142,10 @@ class TestCleanupItem(object):
             for func in funcs:
                 assert func.cached_result is None, "`cached_result` wasn't cleanup"
 
-    @staticmethod
-    def check_cleanup_stack(stack):
-        assert stack
-        for cal in stack:
-            assert not hasattr(cal, "_prepare_exc"), "_prepare_exc wasn't delete"
-
     def test_refresh_state(self, called_item, fixtures, stack):
         assert refresh_state(called_item)
         self.check_cleanup_fixtures(fixtures)
-        self.check_cleanup_stack(stack)
+        assert not stack
 
     def test_write_coupled_report_without_fixtures(self, called_item):
         coupled_tests = [

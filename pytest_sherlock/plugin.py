@@ -2,6 +2,8 @@ from __future__ import absolute_import
 
 from pytest_sherlock.sherlock import Sherlock
 
+PLUGIN_NAME = "pytest_sherlock.plugin"
+
 
 def pytest_addoption(parser):
     group = parser.getgroup("sherlock", "Try to find coupled tests")
@@ -25,8 +27,10 @@ def pytest_configure(config):
     if not config.getoption("--flaky-test"):
         return
 
-    config.sherlock = Sherlock(config)
-    config.pluginmanager.register(config.sherlock)
+    plugin = config.pluginmanager.get_plugin(PLUGIN_NAME)
+    if not plugin:
+        config.sherlock = Sherlock(config)
+        config.pluginmanager.register(config.sherlock, name=PLUGIN_NAME)
 
 
 def pytest_report_teststatus(report):

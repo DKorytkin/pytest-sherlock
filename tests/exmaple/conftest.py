@@ -3,7 +3,6 @@ import os
 
 import pytest
 
-pytest_plugins = "pytest_sherlock.plugin"
 EXAMPLE_ROOT = os.path.dirname(os.path.abspath(__file__))
 
 

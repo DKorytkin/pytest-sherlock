@@ -49,7 +49,7 @@ def draw_tree(node):
 
     Returns
     -------
-    None
+    str
     """
 
     def _left_shift_lines(lines, width):
@@ -155,7 +155,7 @@ def draw_tree(node):
         )
 
     all_lines, _, _, _ = _count_lines(node)
-    print("\n".join(all_lines))
+    return "\n".join(all_lines)
 
 
 def make_tee(items):

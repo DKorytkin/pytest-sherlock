@@ -17,9 +17,9 @@ class NotFoundError(SherlockError):
     @classmethod
     def make_from(cls, test_name, items):
         msg = (
-            "Test not found: {}. "
-            "Please validate your test name (ex: 'tests/unit/test_one.py::test_first')"
-        ).format(test_name)
+            f"Test not found: {test_name}. "
+            f"Please validate your test name (ex: 'tests/unit/test_one.py::test_first')"
+        )
 
         if ".py::" in test_name:
             target_test_name = test_name.split("::")[-1]
@@ -27,7 +27,7 @@ class NotFoundError(SherlockError):
             target_test_name = test_name.split("[")[0]
         target_test_names = [i.nodeid for i in items if target_test_name in i.name]
         if target_test_names:
-            msg += "\nFound similar test names: {}".format(target_test_names)
+            msg += f"\nFound similar test names: {test_name}"
         return cls(msg)
 
 
@@ -36,13 +36,13 @@ def _remove_cached_results_from_failed_fixtures(item):
     Note: remove all cached_result attribute from every fixture
     """
     try:
-        info = item._fixtureinfo
+        info = getattr(item, "_fixtureinfo")
     except AttributeError:
         # doctests items have no _fixtureinfo attribute
-        return
+        return False
     if not info.name2fixturedefs:
         # this test item does not use any fixtures
-        return
+        return False
 
     for _, fixture_defs in sorted(info.name2fixturedefs.items()):
         if not fixture_defs:
@@ -78,10 +78,13 @@ def write_coupled_report(coupled_tests):
     # TODO can I get info about modified common fixtures?
     coupled_test_names = [t.nodeid.replace("::()::", "::") for t in coupled_tests]
     common_fixtures = set.intersection(*[set(t.fixturenames) for t in coupled_tests])
-    msg = "Found coupled tests:\n{}\n\n".format("\n".join(coupled_test_names))
+    coupled_tests = "\n".join(coupled_test_names)
+    msg = f"Found coupled tests:\n{coupled_tests}\n\n"
     if common_fixtures:
-        msg += "Common fixtures:\n{}\n\n".format("\n".join(common_fixtures))
-    msg += "How to reproduce:\npytest -l -vv {}\n".format(" ".join(coupled_test_names))
+        common_fixtures = "\n".join(common_fixtures)
+        msg += f"Common fixtures:\n{common_fixtures}\n\n"
+    coupled_test_names = " ".join(coupled_test_names)
+    msg += f"How to reproduce:\npytest -l -vv {coupled_test_names}\n"
     return msg
 
 
@@ -121,41 +124,6 @@ def log(item):
     item.ihook.pytest_runtest_logstart(nodeid=item.nodeid, location=item.location)
     yield item.ihook.pytest_runtest_logreport
     item.ihook.pytest_runtest_logfinish(nodeid=item.nodeid, location=item.location)
-
-
-class Cache(object):
-    def __init__(self, config):
-        """
-        Parameters
-        ----------
-        config: _pytest.config.Config
-        """
-        self.config = config
-        self._data = []
-
-    def get(self):
-        """
-        Returns
-        -------
-        list[list[str]]
-        """
-        return self.config.cache.get(self.KEY, [])
-
-    def add(self, items):
-        """
-        Parameters
-        ----------
-        items: list[_pytest.python.Function]
-
-        Returns
-        -------
-        bool
-        """
-        self._data.append([item.nodeid for item in items])
-        return True
-
-    def store(self):
-        return True
 
 
 class Sherlock(object):
@@ -217,7 +185,7 @@ class Sherlock(object):
         :param str|int step:
         :param str|int maximum:
         """
-        message = "Step [{} of {}]:".format(step, maximum)
+        message = f"Step [{step} of {maximum}]:"
         self.reporter.write_sep("_", message, yellow=True, bold=True)
 
     def reset_progress(self, items):
@@ -257,9 +225,7 @@ class Sherlock(object):
             message = failed_report.longrepr
         else:
             message = str(failed_report.longrepr)
-        failed_report.longrepr = "\n{}\n\n{}".format(
-            write_coupled_report(coupled), message
-        )
+        failed_report.longrepr = f"\n{write_coupled_report(coupled)}\n\n{message}"
         self.reporter.stats["failed"] = [failed_report]
         xml = getattr(self.config, "_xml", None)
         if xml:
@@ -317,6 +283,7 @@ class Sherlock(object):
         :param _pytest.config.Config config: pytest config object
         :param List[_pytest.python.Function] items: list of item objects
         """
+        _ = session  # to make pylint happy
         if config.getoption("--flaky-test"):
             idx, target_test_method = find_target_test(
                 items, config.option.flaky_test.strip()
@@ -345,11 +312,10 @@ class Sherlock(object):
         :param py._path.local.LocalPath startdir:
         :param List[_pytest.python.Function] items: contain just target test
         """
-        msg = "Try to find coupled tests in [{}-{}] steps".format(
-            self._min_iterations, self._max_iterations
-        )
+        _ = config, startdir, items  # to make pylint happy
+        msg = f"Try to find coupled tests in [{self._min_iterations}-{self._max_iterations}] steps"
         if self.start_from_step:
-            msg = "{} (reproduce from {} step)".format(msg, self.start_from_step)
+            msg = f"{msg} (reproduce from {self.start_from_step} step)"
         return msg
 
     def pytest_runtestloop(self, session):
@@ -362,9 +328,7 @@ class Sherlock(object):
             session.testsfailed
             and not session.config.option.continue_on_collection_errors
         ):
-            raise session.Interrupted(
-                "%d errors during collection" % session.testsfailed
-            )
+            raise session.Interrupted(f"{session.testsfailed} errors during collection")
 
         if session.config.option.collectonly:
             return True
@@ -388,9 +352,9 @@ class Sherlock(object):
             try:
                 # shift left if a report is red or shifts right if green
                 items = self.collection.send(bool(self.failed_report))
-            except StopIteration:
+            except StopIteration as err:
                 if len(items) != 2:  # the last iteration must contain two tests
-                    raise SherlockError("Something is going wrong")
+                    raise SherlockError("Something is going wrong") from err
                 if self.failed_report:
                     self.patch_report(self.failed_report, coupled=items)
                     self.last_failed = items
@@ -402,6 +366,7 @@ class Sherlock(object):
 
     @pytest.hookimpl(hookwrapper=True, trylast=True)
     def pytest_runtest_makereport(self, item, call):
+        _ = item, call  # to make pylint happy
         report = yield
         test_report = report.get_result()
         if (
@@ -420,8 +385,8 @@ class Sherlock(object):
     @pytest.hookimpl(hookwrapper=True, trylast=True)
     def pytest_sessionfinish(self, session):
         yield
-        self.config.cache.set(self.KEY, self._steps)
+        session.config.cache.set(self.KEY, self._steps)
         if self.last_failed:
-            self.config.cache.set(
+            session.config.cache.set(
                 "cache/lastfailed", {i.nodeid: True for i in self.last_failed}
             )

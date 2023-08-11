@@ -8,32 +8,24 @@ class Node(object):
         return str(self.items)
 
     def __repr__(self):
-        return "<Node {}>".format(self.items)
+        return f"<Node {self.items}>"
 
     @staticmethod
     def validate(items):
         if not isinstance(items, tuple):
-            raise RuntimeError(
-                "Must be tuple with indices, (start, end): {}".format(items)
-            )
+            raise RuntimeError(f"Must be tuple with indices, (start, end): {items}")
         if len(items) != 2:
-            raise RuntimeError(
-                "Must contain (start, end) indices of tests: {}".format(items)
-            )
+            raise RuntimeError(f"Must contain (start, end) indices of tests: {items}")
 
         start, end = items
         if not isinstance(start, int) or not isinstance(end, int):
-            raise RuntimeError("Indices must be integer: {}".format(items))
+            raise RuntimeError(f"Indices must be integer: {items}")
         if start < 0:
             raise RuntimeError(
-                "Invalid start index must be started from 0 or greater: {}".format(
-                    items
-                )
+                f"Invalid start index must be started from 0 or greater: {items}"
             )
         if start >= end:
-            raise RuntimeError(
-                "Invalid end index must be greater than start: {}".format(items)
-            )
+            raise RuntimeError(f"Invalid end index must be greater than start: {items}")
         return items
 
 

@@ -36,3 +36,4 @@ def pytest_configure(config):
 def pytest_report_teststatus(report):
     if report.outcome == "flaky":
         return "flaky", "F", ("FLAKY", {"yellow": True})
+    return None

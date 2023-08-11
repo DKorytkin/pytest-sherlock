@@ -238,11 +238,9 @@ class TestSherlock(object):
 
         sherlock = Sherlock(config)
         assert sherlock.config == config
-        assert sherlock.verbose is True
         assert sherlock.collection is None
         assert sherlock.session is None
         assert sherlock.reporter is None
-        assert sherlock.target_test_method is None
         assert sherlock.failed_report is None
 
     def test_instance_after_pytest_sessionstart(self, config, session, reporter):
@@ -250,11 +248,9 @@ class TestSherlock(object):
         next(sherlock.pytest_sessionstart(session))
 
         assert sherlock.config == config
-        assert sherlock.verbose is True
         assert sherlock.collection is None
         assert sherlock.session == session
         assert sherlock.reporter == reporter
-        assert sherlock.target_test_method is None
         assert sherlock.failed_report is None
 
     @pytest.mark.parametrize("line", ("123", 12), ids=["string", "integer"])

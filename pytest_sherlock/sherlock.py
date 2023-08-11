@@ -166,7 +166,7 @@ class Collection:
         items = self.collection.send(is_fail)
         if items:
             items.append(self.target_test_method)
-            refresh_state(item=self.collection.target_test_method)
+            refresh_state(item=self.target_test_method)
         return items
 
     def __next__(self):

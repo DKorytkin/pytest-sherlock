@@ -412,7 +412,10 @@ class Sherlock(object):
         elif test_report.outcome != "passed":
             test_report.outcome = "flaky"
             if self.verbose:
-                test_report.longrepr.toterminal(self.reporter._tw)
+                if hasattr(test_report.longrepr, "toterminal"):
+                    test_report.longrepr.toterminal(self.reporter._tw)
+                else:
+                    self.reporter.line(str(test_report.longrepr))
 
     @pytest.hookimpl(hookwrapper=True, trylast=True)
     def pytest_sessionfinish(self, session):
